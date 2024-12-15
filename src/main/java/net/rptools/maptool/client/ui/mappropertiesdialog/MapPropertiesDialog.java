@@ -185,7 +185,7 @@ public class MapPropertiesDialog extends JDialog {
     // Color picker
     paintChooser = new PaintChooser();
     AssetPanelModel model = new AssetPanelModel();
-    Set<File> assetRootList = AppPreferences.getAssetRoots();
+    Set<File> assetRootList = AppStatePersisted.getAssetRoots();
     for (File file : assetRootList) {
       model.addRootGroup(new AssetDirectory(file, AppConstants.IMAGE_FILE_FILTER));
     }
@@ -273,6 +273,10 @@ public class MapPropertiesDialog extends JDialog {
     return formPanel.getComboBox("lightingStyle");
   }
 
+  public JCheckBox getIsLandingMapCheckBox() {
+    return formPanel.getCheckBox("isLandingMap");
+  }
+
   public JComboBox getAStarRoundingOptionsComboBox() {
     return formPanel.getComboBox("aStarRoundingOptionsComboBox");
   }
@@ -283,6 +287,8 @@ public class MapPropertiesDialog extends JDialog {
   }
 
   private void copyZoneToUI() {
+    var campaign = MapTool.getClient().getCampaign();
+
     getNameTextField().setText(zone.getName());
     getPlayerAliasTextField().setText(zone.getPlayerAlias());
     // Localizes units per cell, using the proper separator. Fixes #507.
@@ -297,6 +303,7 @@ public class MapPropertiesDialog extends JDialog {
     getVisionTypeCombo().setSelectedItem(zone.getVisionType());
     getLightingStyleCombo().setSelectedItem(zone.getLightingStyle());
     getAStarRoundingOptionsComboBox().setSelectedItem(zone.getAStarRounding());
+    getIsLandingMapCheckBox().setSelected(zone.getId().equals(campaign.getLandingMapId()));
 
     gridOffsetX = zone.getGrid().getOffsetX();
     gridOffsetY = zone.getGrid().getOffsetY();
@@ -324,33 +331,42 @@ public class MapPropertiesDialog extends JDialog {
     zone.setFogPaint(fogPaint);
     zone.setBackgroundPaint(backgroundPaint);
     zone.setMapAsset(mapAsset != null ? mapAsset.getMD5Key() : null);
+
+    var campaign = MapTool.getClient().getCampaign();
+    if (getIsLandingMapCheckBox().isSelected()) {
+      campaign.setLandingMapId(zone.getId());
+    } else if (zone.getId().equals(campaign.getLandingMapId())) {
+      // This zone was the landing map but got toggled off.
+      campaign.setLandingMapId(null);
+    }
+
     // TODO: Handle grid type changes
   }
 
   private void initIsometricRadio() {
-    getIsometricRadio().setSelected(GridFactory.isIsometric(AppPreferences.getDefaultGridType()));
+    getIsometricRadio().setSelected(GridFactory.isIsometric(AppPreferences.defaultGridType.get()));
     getIsometricIcon().setIcon(RessourceManager.getSmallIcon(Icons.GRID_ISOMETRIC));
   }
 
   private void initHexHoriRadio() {
     getHexHorizontalRadio()
-        .setSelected(GridFactory.isHexHorizontal(AppPreferences.getDefaultGridType()));
+        .setSelected(GridFactory.isHexHorizontal(AppPreferences.defaultGridType.get()));
     getHexHorizontalIcon().setIcon(RessourceManager.getSmallIcon(Icons.GRID_HEX_HORIZONTAL));
   }
 
   private void initHexVertRadio() {
     getHexVerticalRadio()
-        .setSelected(GridFactory.isHexVertical(AppPreferences.getDefaultGridType()));
+        .setSelected(GridFactory.isHexVertical(AppPreferences.defaultGridType.get()));
     getHexVerticalIcon().setIcon(RessourceManager.getSmallIcon(Icons.GRID_HEX_VERTICAL));
   }
 
   private void initSquareRadio() {
-    getSquareRadio().setSelected(GridFactory.isSquare(AppPreferences.getDefaultGridType()));
+    getSquareRadio().setSelected(GridFactory.isSquare(AppPreferences.defaultGridType.get()));
     getSquareIcon().setIcon(RessourceManager.getSmallIcon(Icons.GRID_SQUARE));
   }
 
   private void initNoGridRadio() {
-    getNoGridRadio().setSelected(GridFactory.isNone(AppPreferences.getDefaultGridType()));
+    getNoGridRadio().setSelected(GridFactory.isNone(AppPreferences.defaultGridType.get()));
     getNoGridIcon().setIcon(RessourceManager.getSmallIcon(Icons.GRID_NONE));
   }
 
@@ -508,7 +524,7 @@ public class MapPropertiesDialog extends JDialog {
   }
 
   private void initPixelsPerCellTextField() {
-    getPixelsPerCellTextField().setText(Integer.toString(AppPreferences.getDefaultGridSize()));
+    getPixelsPerCellTextField().setText(Integer.toString(AppPreferences.defaultGridSize.get()));
   }
 
   public JTextField getDefaultVisionTextField() {
@@ -517,7 +533,7 @@ public class MapPropertiesDialog extends JDialog {
 
   private void initDefaultVisionTextField() {
     this.getDefaultVisionTextField()
-        .setText(Integer.toString(AppPreferences.getDefaultVisionDistance()));
+        .setText(Integer.toString(AppPreferences.defaultVisionDistance.get()));
   }
 
   private void initVisionTypeCombo() {
@@ -525,7 +541,7 @@ public class MapPropertiesDialog extends JDialog {
     for (Zone.VisionType vt : Zone.VisionType.values()) {
       model.addElement(vt);
     }
-    model.setSelectedItem(AppPreferences.getDefaultVisionType());
+    model.setSelectedItem(AppPreferences.defaultVisionType.get());
     getVisionTypeCombo().setModel(model);
   }
 
@@ -559,24 +575,16 @@ public class MapPropertiesDialog extends JDialog {
   private Grid createZoneGrid() {
     Grid grid = null;
     if (getHexHorizontalRadio().isSelected()) {
-      grid =
-          GridFactory.createGrid(
-              GridFactory.HEX_HORI, AppPreferences.getFaceEdge(), AppPreferences.getFaceVertex());
+      grid = GridFactory.createGrid(GridFactory.HEX_HORI);
     }
     if (getHexVerticalRadio().isSelected()) {
-      grid =
-          GridFactory.createGrid(
-              GridFactory.HEX_VERT, AppPreferences.getFaceEdge(), AppPreferences.getFaceVertex());
+      grid = GridFactory.createGrid(GridFactory.HEX_VERT);
     }
     if (getSquareRadio().isSelected()) {
-      grid =
-          GridFactory.createGrid(
-              GridFactory.SQUARE, AppPreferences.getFaceEdge(), AppPreferences.getFaceVertex());
+      grid = GridFactory.createGrid(GridFactory.SQUARE);
     }
     if (getIsometricRadio().isSelected()) {
-      grid =
-          GridFactory.createGrid(
-              GridFactory.ISOMETRIC, AppPreferences.getFaceEdge(), AppPreferences.getFaceVertex());
+      grid = GridFactory.createGrid(GridFactory.ISOMETRIC);
     }
     if (getNoGridRadio().isSelected()) {
       grid = GridFactory.createGrid(GridFactory.NONE);
@@ -677,7 +685,7 @@ public class MapPropertiesDialog extends JDialog {
 
     private JComponent createImageExplorerPanel() {
       AssetPanelModel model = new AssetPanelModel();
-      Set<File> assetRootList = AppPreferences.getAssetRoots();
+      Set<File> assetRootList = AppStatePersisted.getAssetRoots();
       for (File file : assetRootList) {
         model.addRootGroup(new AssetDirectory(file, AppConstants.IMAGE_FILE_FILTER));
       }

@@ -71,6 +71,9 @@ public class MessagePanel extends JPanel {
     textPane.setEditorKit(new MessagePanelEditorKit());
     if (ThemeSupport.shouldUseThemeColorsForChat()) {
       textPane.setUI(new javax.swing.plaf.basic.BasicEditorPaneUI());
+    } else {
+      textPane.setBackground(new Color(253, 253, 254));
+      textPane.setForeground(Color.BLACK);
     }
     textPane.addComponentListener(
         new ComponentListener() {
@@ -149,22 +152,28 @@ public class MessagePanel extends JPanel {
     new MapToolEventBus().getMainEventBus().register(this);
     // Create the style
     StyleSheet style = document.getStyleSheet();
-    var defColor =
+    var fgColour =
         ThemeSupport.shouldUseThemeColorsForChat()
             ? MessageUtil.getDefaultForegroundHex()
             : "black";
+    var bgColour =
+        ThemeSupport.shouldUseThemeColorsForChat()
+            ? MessageUtil.getDefaultBackgroundHex()
+            : "#fdfdfe";
     var mainCss =
-        "body {color: "
-            + defColor
+        "body {background-color: "
+            + bgColour
+            + "; color: "
+            + fgColour
             + " ; font-family: sans-serif; font-size: "
-            + AppPreferences.getFontSize()
+            + AppPreferences.fontSize.get()
             + "pt}";
 
     style.addRule(mainCss);
     style.addRule("div {margin-bottom: 5px}");
     style.addRule(".roll {background:#efefef}");
     setTrustedMacroPrefixColors(
-        AppPreferences.getTrustedPrefixFG(), AppPreferences.getTrustedPrefixBG());
+        AppPreferences.trustedPrefixForeground.get(), AppPreferences.trustedPrefixBackground.get());
     var css = MessageUtil.getMessageCss();
     style.addRule(css);
     repaint();

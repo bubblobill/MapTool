@@ -44,6 +44,7 @@ import java.util.zip.ZipInputStream;
 import net.rptools.maptool.client.ui.token.BarTokenOverlay;
 import net.rptools.maptool.model.AStarCellPointConverter;
 import net.rptools.maptool.model.ShapeType;
+import net.rptools.maptool.model.converters.WallTopologyConverter;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.logging.log4j.LogManager;
@@ -484,6 +485,7 @@ public class FileUtil {
     XStream.setupDefaultSecurity(xStream);
     xStream.allowTypesByWildcard(new String[] {"net.rptools.**", "java.awt.**", "sun.awt.**"});
     xStream.registerConverter(new AStarCellPointConverter());
+    xStream.registerConverter(new WallTopologyConverter(xStream));
     xStream.addImmutableType(ShapeType.class, true);
     xStream.addImmutableType(BarTokenOverlay.Side.class, true);
     return xStream;

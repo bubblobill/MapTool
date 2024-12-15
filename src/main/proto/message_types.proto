@@ -16,10 +16,16 @@ import "data_transfer_objects.proto";
 import "drawing_dto.proto";
 import "gamedata.proto";
 
-message AddTopologyMsg {
+message UpdateMaskTopologyMsg {
   string zone_guid = 1;
   AreaDto area = 2;
-  TopologyTypeDto type = 3;
+  bool erase = 3;
+  TopologyTypeDto type = 4;
+}
+
+message SetWallTopologyMsg {
+  string zone_guid = 1;
+  WallTopologyDto topology = 2;
 }
 
 message BootPlayerMsg {
@@ -174,12 +180,6 @@ message RemoveTokensMsg {
   repeated string token_guid = 2;
 }
 
-message RemoveTopologyMsg {
-  string zone_guid = 1;
-  AreaDto area = 2;
-  TopologyTypeDto type = 3;
-}
-
 message RemoveZoneMsg {
   string zone_guid = 1;
 }
@@ -210,6 +210,10 @@ message SetCampaignMsg {
 
 message SetCampaignNameMsg {
   string name = 1;
+}
+
+message SetCampaignLandingMapMsg {
+  optional string landing_map_id = 1;
 }
 
 message SetFowMsg {

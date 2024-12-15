@@ -21,6 +21,7 @@ import java.io.StringReader;
 import java.util.*;
 import java.util.List;
 import javax.swing.*;
+import javax.swing.table.DefaultTableCellRenderer;
 import net.rptools.CaseInsensitiveHashMap;
 import net.rptools.maptool.client.MapTool;
 import net.rptools.maptool.client.swing.AbeillePanel;
@@ -35,9 +36,11 @@ import net.rptools.maptool.model.sheet.stats.StatSheet;
 import net.rptools.maptool.model.sheet.stats.StatSheetLocation;
 import net.rptools.maptool.model.sheet.stats.StatSheetManager;
 import net.rptools.maptool.model.sheet.stats.StatSheetProperties;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class TokenPropertiesManagementPanel extends AbeillePanel<CampaignProperties> {
-
+  private static final Logger log = LogManager.getLogger(TokenPropertiesManagementPanel.class);
   private Map<String, List<TokenProperty>> tokenTypeMap;
   private final Map<String, StatSheetProperties> tokenTypeStatSheetMap = new HashMap<>();
   private String editingType;
@@ -84,6 +87,12 @@ public class TokenPropertiesManagementPanel extends AbeillePanel<CampaignPropert
     campaign.setDefaultTokenPropertyType(defaultPropertyType);
   }
 
+  public void finalizeCellEditing() {
+    if (getTokenPropertiesTable().isEditing()) {
+      getTokenPropertiesTable().getCellEditor().stopCellEditing();
+    }
+  }
+
   public JList getTokenTypeList() {
     JList list = (JList) getComponent("tokenTypeList");
     if (list == null) {
@@ -102,6 +111,10 @@ public class TokenPropertiesManagementPanel extends AbeillePanel<CampaignPropert
 
   public JButton getTypeDeleteButton() {
     return (JButton) getComponent("typeDeleteButton");
+  }
+
+  public JButton getTypeDuplicateButton() {
+    return (JButton) getComponent("typeDuplicateButton");
   }
 
   public JButton getPropertyMoveUpButton() {
@@ -136,8 +149,20 @@ public class TokenPropertiesManagementPanel extends AbeillePanel<CampaignPropert
     return (JButton) getComponent("typeDefaultButton");
   }
 
+  public JButton getHelpButton() {
+    return (JButton) getComponent("helpButton");
+  }
+
+  public JPanel getDescriptionContainer() {
+    return (JPanel) getComponent("descriptionContainer");
+  }
+
   public TokenPropertiesTableModel getTokenPropertiesTableModel() {
     return (TokenPropertiesTableModel) getTokenPropertiesTable().getModel();
+  }
+
+  public JScrollPane getTableScrollPane() {
+    return (JScrollPane) getComponent("tokenPropertiesTableScrollPane");
   }
 
   public void initTypeAddButton() {
@@ -230,7 +255,9 @@ public class TokenPropertiesManagementPanel extends AbeillePanel<CampaignPropert
     var button = getPropertyMoveUpButton();
     button.addActionListener(
         l -> {
-          var selectedRow = getTokenPropertiesTable().getSelectedRow();
+          finalizeCellEditing();
+          JTable propertiesTable = getTokenPropertiesTable();
+          var selectedRow = propertiesTable.getSelectedRow();
           if (selectedRow <= 0) {
             return;
           }
@@ -238,7 +265,8 @@ public class TokenPropertiesManagementPanel extends AbeillePanel<CampaignPropert
           var model = getTokenPropertiesTableModel();
           model.movePropertyUp(selectedRow);
           --selectedRow;
-          getTokenPropertiesTable().setRowSelectionInterval(selectedRow, selectedRow);
+          propertiesTable.setRowSelectionInterval(selectedRow, selectedRow);
+          propertiesTable.scrollRectToVisible(propertiesTable.getCellRect(selectedRow, 0, true));
         });
     button.setEnabled(false);
   }
@@ -247,15 +275,18 @@ public class TokenPropertiesManagementPanel extends AbeillePanel<CampaignPropert
     var button = getPropertyMoveDownButton();
     button.addActionListener(
         l -> {
-          var selectedRow = getTokenPropertiesTable().getSelectedRow();
-          if (selectedRow < 0 || selectedRow >= getTokenPropertiesTable().getRowCount() - 1) {
+          finalizeCellEditing();
+          JTable propertiesTable = getTokenPropertiesTable();
+          var selectedRow = propertiesTable.getSelectedRow();
+          if (selectedRow < 0 || selectedRow >= propertiesTable.getRowCount() - 1) {
             return;
           }
 
           var model = getTokenPropertiesTableModel();
           model.movePropertyDown(selectedRow);
           ++selectedRow;
-          getTokenPropertiesTable().setRowSelectionInterval(selectedRow, selectedRow);
+          propertiesTable.setRowSelectionInterval(selectedRow, selectedRow);
+          propertiesTable.scrollRectToVisible(propertiesTable.getCellRect(selectedRow, 0, true));
         });
     button.setEnabled(false);
   }
@@ -266,8 +297,18 @@ public class TokenPropertiesManagementPanel extends AbeillePanel<CampaignPropert
         e ->
             EventQueue.invokeLater(
                 () -> {
+                  finalizeCellEditing();
+                  JTable propertiesTable = getTokenPropertiesTable();
                   var model = getTokenPropertiesTableModel();
-                  model.addProperty();
+                  // selected row is -1 for no selection causing property to be appended to list
+                  // instead of inserted
+                  int selectedRow = propertiesTable.getSelectedRow();
+                  model.addProperty(selectedRow);
+                  int count = model.getRowCount();
+                  propertiesTable.scrollRectToVisible(
+                      propertiesTable.getCellRect(
+                          selectedRow == -1 ? count - 1 : selectedRow, 0, true));
+                  propertiesTable.repaint();
                 }));
     button.setEnabled(false);
   }
@@ -278,10 +319,46 @@ public class TokenPropertiesManagementPanel extends AbeillePanel<CampaignPropert
         e ->
             EventQueue.invokeLater(
                 () -> {
+                  finalizeCellEditing();
                   var model = getTokenPropertiesTableModel();
                   model.deleteProperty(getTokenPropertiesTable().getSelectedRow());
                 }));
     button.setEnabled(false);
+  }
+
+  public void initTypeDuplicateButton() {
+    var button = getTypeDuplicateButton();
+    button.addActionListener(
+        e ->
+            EventQueue.invokeLater(
+                () -> {
+                  log.info("Type Duplicate - button action");
+                  var propertyType = (String) getTokenTypeList().getSelectedValue();
+                  if (propertyType != null) {
+                    String newName = propertyType + "@";
+                    tokenTypeMap.put(newName, tokenTypeMap.get(propertyType));
+                    updateTypeList();
+                    getTokenTypeList().setSelectedValue(newName, true);
+                    button.setEnabled(true);
+                  }
+                }));
+    button.setEnabled(false);
+  }
+
+  public void initDescriptionContainer() {
+    getDescriptionContainer().setVisible(false);
+  }
+
+  public void initHelpButton() {
+    var button = getHelpButton();
+    button.addActionListener(
+        e ->
+            EventQueue.invokeLater(
+                () -> {
+                  JPanel helpText = getDescriptionContainer();
+                  helpText.setVisible(!helpText.isVisible());
+                }));
+    button.setEnabled(true);
   }
 
   public void initPropertyTable() {
@@ -309,9 +386,6 @@ public class TokenPropertiesManagementPanel extends AbeillePanel<CampaignPropert
                   getTokenPropertiesTable().getSelectedRow()
                       < getTokenPropertiesTable().getRowCount() - 1);
             });
-    propertyTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-    propertyTable.getColumnModel().getColumn(0).setPreferredWidth(80);
-    propertyTable.getColumnModel().getColumn(2).setPreferredWidth(100);
   }
 
   public void initTokenTypeName() {
@@ -361,10 +435,14 @@ public class TokenPropertiesManagementPanel extends AbeillePanel<CampaignPropert
                   getTokenTypeList().getSelectedValue() == null
                       ? null
                       : getTokenTypeList().getSelectedValue().toString();
+
+              finalizeCellEditing();
+
               if (propertyType == null) {
                 reset();
                 getPropertyAddButton().setEnabled(false);
                 getTypeDeleteButton().setEnabled(false);
+                getTypeDuplicateButton().setEnabled(false);
                 getTokenTypeName().setEditable(false);
                 getStatSheetComboBox().setEnabled(false);
                 getStatSheetLocationComboBox().setEnabled(false);
@@ -372,6 +450,7 @@ public class TokenPropertiesManagementPanel extends AbeillePanel<CampaignPropert
               } else {
                 bind((String) getTokenTypeList().getSelectedValue());
                 getPropertyAddButton().setEnabled(true);
+                getTypeDuplicateButton().setEnabled(true);
                 getTokenTypeName().setEditable(true);
                 // Can't delete the default property
                 if (propertyType.equals(defaultPropertyType)) {
@@ -610,6 +689,116 @@ public class TokenPropertiesManagementPanel extends AbeillePanel<CampaignPropert
       throw new IllegalArgumentException(); // Don't save the properties...
     }
     return propertyList;
+  }
+
+  public void prettify() {
+
+    /* fix text areas to look like labels
+     * dig down to the appropriate container level
+     * then set the backgrounds to transparent
+     */
+    JPanel jPanel = (JPanel) super.getComponent("descriptionContainer");
+    List<Component> jPanels =
+        Arrays.stream(jPanel.getComponents()).filter(c -> c instanceof JPanel).toList();
+
+    Color transparent = new Color(0, 0, 0, 1);
+    for (Component panel : jPanels) {
+      JPanel jp = (JPanel) panel;
+      Component[] components = jp.getComponents();
+      Arrays.stream(components).toList().forEach(c -> c.setBackground(transparent));
+    }
+
+    JTable propertyTable = getTokenPropertiesTable();
+    /* prettify - take cell background colour and adjust the luminance for cell contrast.
+    change the hue and saturation for the grid line colour
+     */
+    Color bg, bgSmall, gridColour;
+    bg = propertyTable.getTableHeader().getComponent(0).getBackground(); // get background colour
+    float[] hsbComponents = new float[3];
+    Color.RGBtoHSB(bg.getRed(), bg.getGreen(), bg.getBlue(), hsbComponents); // convert to HSB
+
+    boolean lighten = hsbComponents[2] < 0.5f; // to determine direction of change
+    hsbComponents[2] =
+        lighten
+            ? hsbComponents[2] + 0.015f
+            : hsbComponents[2] - 0.025f; // small change in brilliance
+    bgSmall = new Color(Color.HSBtoRGB(hsbComponents[0], hsbComponents[1], hsbComponents[2]));
+
+    hsbComponents[2] =
+        lighten
+            ? hsbComponents[2] + 0.04f
+            : hsbComponents[2] - 0.02f; // bigger change in brilliance
+    bg = new Color(Color.HSBtoRGB(hsbComponents[0], hsbComponents[1], hsbComponents[2]));
+
+    hsbComponents[0] =
+        hsbComponents[0] < 0.5
+            ? hsbComponents[0] + 0.5f
+            : hsbComponents[0] - 0.5f; // change hue 180 degrees
+    hsbComponents[1] =
+        hsbComponents[1] < 0.25
+            ? hsbComponents[1] + 0.25f // increase saturation if it is low
+            : hsbComponents[1];
+    gridColour = new Color(Color.HSBtoRGB(hsbComponents[0], hsbComponents[1], hsbComponents[2]));
+
+    DefaultTableCellRenderer cellRenderer =
+        new DefaultTableCellRenderer(); // cell renderer for contrasting cells
+    cellRenderer.setBackground(bgSmall);
+    cellRenderer.setHorizontalAlignment(DefaultTableCellRenderer.LEFT);
+
+    DefaultTableCellRenderer headerRenderer =
+        new DefaultTableCellRenderer(); // cell renderer for contrasting headings
+    headerRenderer.setBackground(bg);
+    headerRenderer.setHorizontalAlignment(DefaultTableCellRenderer.CENTER);
+    headerRenderer.setVerticalAlignment(SwingConstants.TOP);
+
+    DefaultTableCellRenderer headerRenderer2 = new DefaultTableCellRenderer();
+    headerRenderer2.setVerticalAlignment(SwingConstants.TOP);
+    headerRenderer2.setHorizontalAlignment(SwingConstants.CENTER);
+
+    DefaultTableCellRenderer rowHeaderRenderer =
+        new DefaultTableCellRenderer(); // cell renderer for contrasting headings
+    headerRenderer.setBackground(bg);
+    headerRenderer.setHorizontalAlignment(DefaultTableCellRenderer.LEFT);
+
+    propertyTable.setGridColor(gridColour);
+    propertyTable.setIntercellSpacing(new Dimension(2, 2));
+    propertyTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+    propertyTable.setShowHorizontalLines(true);
+    propertyTable.getTableHeader().setResizingAllowed(true);
+    propertyTable.setFillsViewportHeight(true);
+
+    for (int i = 0; i < propertyTable.getColumnCount(); i++) {
+
+      switch (i) { // set column shading
+        case 0, 2, 4, 6 ->
+            propertyTable.getColumnModel().getColumn(i).setHeaderRenderer(headerRenderer);
+        case 1, 3 -> {
+          propertyTable.getColumnModel().getColumn(i).setCellRenderer(cellRenderer);
+          propertyTable.getColumnModel().getColumn(i).setHeaderRenderer(headerRenderer2);
+        }
+      }
+
+      switch (i) { // set column sizes
+        case 0, 2, 3 -> {
+          propertyTable.getColumnModel().getColumn(i).setMinWidth(60);
+          propertyTable.getColumnModel().getColumn(i).setPreferredWidth(80);
+        }
+        case 1 -> {
+          propertyTable.getColumnModel().getColumn(i).setMinWidth(45);
+          propertyTable.getColumnModel().getColumn(i).setMaxWidth(100);
+          propertyTable.getColumnModel().getColumn(i).setPreferredWidth(55);
+        }
+        case 4, 5, 6 -> {
+          propertyTable.getColumnModel().getColumn(i).setMinWidth(50);
+          propertyTable.getColumnModel().getColumn(i).setMaxWidth(80);
+          propertyTable.getColumnModel().getColumn(i).setPreferredWidth(50);
+        }
+      }
+    }
+    Font hFont = propertyTable.getTableHeader().getComponent(0).getFont();
+    Dimension headerDim = propertyTable.getTableHeader().getSize();
+    headerDim.height = (int) (hFont.getSize() * 3.41);
+    propertyTable.getTableHeader().setPreferredSize(headerDim);
   }
 
   private class TypeListModel extends AbstractListModel {

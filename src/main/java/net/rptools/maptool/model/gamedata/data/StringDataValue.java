@@ -84,9 +84,8 @@ public final class StringDataValue implements DataValue {
     } else {
       return switch (dataType) {
         case LONG, DOUBLE -> canConvertToNumber;
-        case BOOLEAN -> canConvertToNumber
-            || value.equalsIgnoreCase("true")
-            || value.equalsIgnoreCase("false");
+        case BOOLEAN ->
+            canConvertToNumber || value.equalsIgnoreCase("true") || value.equalsIgnoreCase("false");
         case STRING, JSON_ARRAY -> true;
         case JSON_OBJECT, UNDEFINED, ASSET -> false;
       };

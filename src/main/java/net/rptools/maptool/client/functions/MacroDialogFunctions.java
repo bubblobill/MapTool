@@ -26,22 +26,17 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 import net.rptools.maptool.client.MapTool;
-import net.rptools.maptool.client.ui.htmlframe.HTMLDialog;
-import net.rptools.maptool.client.ui.htmlframe.HTMLFrame;
-import net.rptools.maptool.client.ui.htmlframe.HTMLFrameFactory;
+import net.rptools.maptool.client.ui.htmlframe.*;
 import net.rptools.maptool.client.ui.htmlframe.HTMLFrameFactory.FrameType;
-import net.rptools.maptool.client.ui.htmlframe.HTMLOverlayManager;
 import net.rptools.maptool.language.I18N;
 import net.rptools.maptool.model.library.Library;
 import net.rptools.maptool.model.library.LibraryManager;
 import net.rptools.maptool.util.FunctionUtil;
+import net.rptools.maptool.util.HTMLUtil;
 import net.rptools.parser.Parser;
 import net.rptools.parser.ParserException;
 import net.rptools.parser.VariableResolver;
 import net.rptools.parser.function.AbstractFunction;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Element;
-import org.jsoup.parser.Tag;
 
 public class MacroDialogFunctions extends AbstractFunction {
   private static final MacroDialogFunctions instance = new MacroDialogFunctions();
@@ -59,6 +54,7 @@ public class MacroDialogFunctions extends AbstractFunction {
         "closeOverlay",
         "setOverlayVisible",
         "isOverlayVisible",
+        "isOverlayLocked",
         "getFrameProperties",
         "getDialogProperties",
         "getOverlayProperties",
@@ -128,6 +124,11 @@ public class MacroDialogFunctions extends AbstractFunction {
       FunctionUtil.checkNumberParam(functionName, parameters, 1, 1);
       String name = parameters.get(0).toString();
       return isOverlayVisible(name) ? BigDecimal.ONE : BigDecimal.ZERO;
+    }
+    if (functionName.equalsIgnoreCase("isOverlayLocked")) {
+      FunctionUtil.checkNumberParam(functionName, parameters, 1, 1);
+      String name = parameters.get(0).toString();
+      return isOverlayLocked(name) ? BigDecimal.ONE : BigDecimal.ZERO;
     }
     if (functionName.equalsIgnoreCase("resetFrame")) {
       FunctionUtil.checkNumberParam(functionName, parameters, 1, 1);
@@ -200,23 +201,7 @@ public class MacroDialogFunctions extends AbstractFunction {
             I18N.getText("macro.function.html5.invalidURI", url.toExternalForm()));
       }
 
-      htmlString = library.get().readAsString(url).get();
-
-      var document = Jsoup.parse(htmlString);
-      var head = document.select("head").first();
-      if (head != null) {
-        String baseURL = url.toExternalForm().replaceFirst("\\?.*", "");
-        baseURL = baseURL.substring(0, baseURL.lastIndexOf("/") + 1);
-        var baseElement = new Element(Tag.valueOf("base"), "").attr("href", baseURL);
-        if (head.children().isEmpty()) {
-          head.appendChild(baseElement);
-        } else {
-          head.child(0).before(baseElement);
-        }
-
-        htmlString = document.html();
-      }
-
+      htmlString = HTMLUtil.fixHTMLBase(library.get().readAsString(url).get(), url);
     } catch (InterruptedException | ExecutionException | IOException e) {
       throw new ParserException(e);
     }
@@ -286,6 +271,14 @@ public class MacroDialogFunctions extends AbstractFunction {
     HTMLOverlayManager overlay = MapTool.getFrame().getOverlayPanel().getOverlay(name);
     if (overlay != null) {
       return overlay.isVisible();
+    }
+    return false;
+  }
+
+  private boolean isOverlayLocked(String name) {
+    HTMLOverlayManager overlay = MapTool.getFrame().getOverlayPanel().getOverlay(name);
+    if (overlay != null) {
+      return overlay.getLocked();
     }
     return false;
   }

@@ -447,14 +447,16 @@ public class TransferableHelper extends TransferHandler {
     String subType = mediaType.getSubtype();
     return switch (contentType) {
       case "audio", "image" -> true;
-      case "text" -> switch (subType) {
-        case "html", "markdown", "x-web-markdown", "plain", "javascript", "css" -> true;
-        default -> false;
-      };
-      case "application" -> switch (subType) {
-        case "pdf", "json", "javascript", "xml" -> true;
-        default -> false;
-      };
+      case "text" ->
+          switch (subType) {
+            case "html", "markdown", "x-web-markdown", "plain", "javascript", "css" -> true;
+            default -> false;
+          };
+      case "application" ->
+          switch (subType) {
+            case "pdf", "json", "javascript", "xml" -> true;
+            default -> false;
+          };
       default -> false;
     };
   }

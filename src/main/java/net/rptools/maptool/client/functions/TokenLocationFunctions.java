@@ -307,7 +307,7 @@ public class TokenLocationFunctions extends AbstractFunction {
         if (wmetric == null && grid.useMetric())
           wmetric =
               MapTool.isPersonalServer()
-                  ? AppPreferences.getMovementMetric()
+                  ? AppPreferences.movementMetric.get()
                   : MapTool.getServerPolicy().getMovementMetric();
         // explicitly find difference without walkers
         double curDist;
@@ -325,10 +325,12 @@ public class TokenLocationFunctions extends AbstractFunction {
                 ? new AStarSquareEuclideanWalker(zone, wmetric)
                 : grid.createZoneWalker();
 
-        for (CellPoint scell : sourceCells) {
-          for (CellPoint tcell : targetCells) {
-            walker.setWaypoints(scell, tcell);
-            distance = Math.min(distance, walker.getDistance());
+        try (walker) {
+          for (CellPoint scell : sourceCells) {
+            for (CellPoint tcell : targetCells) {
+              walker.setWaypoints(scell, tcell);
+              distance = Math.min(distance, walker.getDistance());
+            }
           }
         }
         if (!units) distance /= zone.getUnitsPerCell();
@@ -381,7 +383,6 @@ public class TokenLocationFunctions extends AbstractFunction {
         try {
           WalkerMetric wmetric = WalkerMetric.valueOf(metric);
           walker = new AStarSquareEuclideanWalker(zone, wmetric);
-
         } catch (IllegalArgumentException e) {
           throw new ParserException(
               I18N.getText("macro.function.getDistance.invalidMetric", metric));
@@ -392,9 +393,11 @@ public class TokenLocationFunctions extends AbstractFunction {
 
       // Get the distances from each source to target cell and keep the minimum one
       double distance = Double.MAX_VALUE;
-      for (CellPoint scell : sourceCells) {
-        walker.setWaypoints(scell, targetCell);
-        distance = Math.min(distance, walker.getDistance());
+      try (walker) {
+        for (CellPoint scell : sourceCells) {
+          walker.setWaypoints(scell, targetCell);
+          distance = Math.min(distance, walker.getDistance());
+        }
       }
 
       if (units) {

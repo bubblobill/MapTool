@@ -496,7 +496,7 @@ public class TokenTopologyPanel extends JPanel {
     tokenTopologiesOriginal.clear();
     tokenTopologiesOptimized.clear();
     for (final var type : Zone.TopologyType.values()) {
-      final var topology = token.getTopology(type);
+      final var topology = token.getMaskTopology(type);
       if (topology != null) {
         selectedTopologyTypes.add(type);
         tokenTopologiesOriginal.put(type, topology);

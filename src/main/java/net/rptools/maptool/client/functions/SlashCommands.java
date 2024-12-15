@@ -44,8 +44,9 @@ public class SlashCommands extends AbstractFunction {
       case "slash.setalias" -> setSlashAlias(parameters);
       case "slash.getaliases" -> getSlashAliases();
       case "slash.clearalias" -> clearSlashAlias(parameters);
-      default -> throw new ParserException(
-          I18N.getText("macro.function.general.unknownFunction", functionName));
+      default ->
+          throw new ParserException(
+              I18N.getText("macro.function.general.unknownFunction", functionName));
     };
   }
 

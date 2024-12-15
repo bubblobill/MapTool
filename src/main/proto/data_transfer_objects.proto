@@ -45,6 +45,7 @@ message CampaignDto {
   repeated MacroButtonPropertiesDto macro_button_properties = 9;
   repeated ZoneDto zones = 10;
   repeated MacroButtonPropertiesDto gm_macro_button_properties = 11;
+  optional string landing_map_id = 12;
 }
 
 message LookupTableDto {
@@ -75,6 +76,7 @@ message LightSourceDto {
   google.protobuf.StringValue id = 3;
   LightTypeDto type = 4;
   bool scale_with_token = 5;
+  bool ignores_VBL = 6;
 }
 
 enum ShapeTypeDto {
@@ -83,17 +85,19 @@ enum ShapeTypeDto {
     CONE = 2;
     HEX = 3;
     GRID = 4;
+    BEAM = 5;
 }
 
 message LightDto {
   DrawablePaintDto paint = 1;
   double facing_offset = 2;
   double radius = 3;
-  double arc_angle = 4;
-  ShapeTypeDto shape = 5;
-  bool is_gm = 6;
-  bool owner_only = 7;
-  int32 lumens = 8;
+  double width = 4;
+  double arc_angle = 5;
+  ShapeTypeDto shape = 6;
+  bool is_gm = 7;
+  bool owner_only = 8;
+  int32 lumens = 9;
 }
 
 message LocationDto {
@@ -137,10 +141,11 @@ message SightTypeDto {
   double multiplier = 2;
   LightSourceDto personal_light_source = 3;
   ShapeTypeDto shape = 4;
-  int32 arc = 5;
-  float distance = 6;
-  int32 offset = 7;
-  bool scale_with_token = 8;
+  double width = 5;
+  int32 arc = 6;
+  float distance = 7;
+  int32 offset = 8;
+  bool scale_with_token = 9;
 }
 
 message TokenPropertyDto {
@@ -491,6 +496,12 @@ message LabelDto {
   int32 y = 4;
   bool show_background = 5;
   int32 foreground_color = 6;
+  int32 background_color = 7;
+  int32 font_size = 8;
+  int32 border_width = 9;
+  int32 border_color = 10;
+  bool show_border = 11;
+  int32 border_arc = 12;
 }
 
 message DrawnElementListDto {
@@ -527,7 +538,6 @@ message ZoneDto {
   int32 token_vision_distance = 7;
   double units_per_cell = 8;
   AStarRoundingOptionsDto a_star_rounding = 9;
-  repeated TopologyTypeDto topologyTypes = 10;
   map<string, DrawnElementListDto> drawables = 11;
   repeated LabelDto labels = 15;
   repeated TokenDto tokens = 16;
@@ -541,6 +551,7 @@ message ZoneDto {
   AreaDto pit_vbl = 24;
   AreaDto cover_vbl = 39;
   AreaDto topology_terrain = 25;
+  WallTopologyDto walls = 12;
   DrawablePaintDto background_paint = 26;
   google.protobuf.StringValue map_asset = 27;
   IntPointDto boardPosition = 28;
@@ -574,7 +585,6 @@ message GridDto {
   int32 offset_x = 1;
   int32 offset_y = 2;
   int32 size = 3;
-  AreaDto cell_shape = 4;
   oneof type {
     SquareGridDto square_grid = 5;
     GridlessGridDto gridless_grid = 6;
@@ -589,14 +599,6 @@ message IsometricGridDto {}
 message HexGridDto {
   bool vertical = 1;
   double hex_ratio = 2;
-  double edge_projection = 3;
-  double minor_radius = 4;
-  double edge_length = 5;
-  double scaled_edge_projection = 6;
-  double scaled_minor_radius = 7;
-  double scaled_edge_length = 8;
-  double last_scale = 9;
-  IntPointDto cellOffset = 10;
 }
 
 enum TokenUpdateDto {
@@ -641,13 +643,11 @@ enum TokenUpdateDto {
     setTerrainModifier = 38;
     setTerrainModifierOperation = 39;
     setTerrainModifiersIgnored = 40;
-    setTopology = 41;
+    setMaskTopology = 41;
     setImageAsset = 42;
     setPortraitImage = 43;
     setCharsheetImage = 44;
     setLayout = 45;
-    createUniqueLightSource = 46;
-    deleteUniqueLightSource = 47;
     clearLightSources = 48;
     removeLightSource = 49;
     addLightSource = 50;
@@ -713,3 +713,22 @@ message TokenFootPrintDto {
   double scale = 5;
   bool localize_name = 6;
 }
+
+// region WallTopology graph
+
+message VertexDto {
+  string id = 1;
+  DoublePointDto position = 2;
+}
+
+message WallDto {
+  string from = 1;
+  string to = 2;
+}
+
+message WallTopologyDto {
+  repeated VertexDto vertices = 1;
+  repeated WallDto walls = 2;
+}
+
+// ednregion

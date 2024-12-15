@@ -48,6 +48,7 @@ public final class LightSource implements Comparable<LightSource>, Serializable 
   private final @Nullable GUID id;
   private final @Nonnull Type type;
   private final boolean scaleWithToken;
+  private final boolean ignoresVBL;
 
   /**
    * This light segments that make up the light source.
@@ -77,8 +78,10 @@ public final class LightSource implements Comparable<LightSource>, Serializable 
    * @param scaleWithToken if {@code true}, the size of the lights will scale with the token size.
    * @param lights The set of lights that constitute the personal light source.
    */
-  public static LightSource createPersonal(boolean scaleWithToken, Collection<Light> lights) {
-    return new LightSource(null, null, Type.NORMAL, scaleWithToken, ImmutableList.copyOf(lights));
+  public static LightSource createPersonal(
+      boolean scaleWithToken, boolean ignoresVBL, Collection<Light> lights) {
+    return new LightSource(
+        null, null, Type.NORMAL, scaleWithToken, ignoresVBL, ImmutableList.copyOf(lights));
   }
 
   /**
@@ -90,6 +93,7 @@ public final class LightSource implements Comparable<LightSource>, Serializable 
    * @param id The unique ID of the light source.
    * @param type The type of light, whether a normal light or an aura.
    * @param scaleWithToken if {@code true}, the size of the lights will scale with the token size.
+   * @param ignoresVBL if {@code true}, the light will ignore vbl
    * @param lights The set of lights that constitute the personal light source.
    */
   public static LightSource createRegular(
@@ -97,8 +101,10 @@ public final class LightSource implements Comparable<LightSource>, Serializable 
       @Nonnull GUID id,
       @Nonnull Type type,
       boolean scaleWithToken,
+      boolean ignoresVBL,
       @Nonnull Collection<Light> lights) {
-    return new LightSource(name, id, type, scaleWithToken, ImmutableList.copyOf(lights));
+    return new LightSource(
+        name, id, type, scaleWithToken, ignoresVBL, ImmutableList.copyOf(lights));
   }
 
   private LightSource(
@@ -106,11 +112,13 @@ public final class LightSource implements Comparable<LightSource>, Serializable 
       @Nullable GUID id,
       @Nonnull Type type,
       boolean scaleWithToken,
+      boolean ignoresVBL,
       @Nonnull List<Light> lights) {
     this.name = name;
     this.id = id;
     this.type = type;
     this.scaleWithToken = scaleWithToken;
+    this.ignoresVBL = ignoresVBL;
     this.lightList = lights;
   }
 
@@ -118,7 +126,7 @@ public final class LightSource implements Comparable<LightSource>, Serializable 
   public Object writeReplace() {
     // Make sure XStream keeps the serialization nice. We don't need the XML to contain
     // implementation details of the ImmutableList in use.
-    return new LightSource(name, id, type, scaleWithToken, new ArrayList<>(lightList));
+    return new LightSource(name, id, type, scaleWithToken, ignoresVBL, new ArrayList<>(lightList));
   }
 
   @SuppressWarnings("ConstantConditions")
@@ -140,6 +148,7 @@ public final class LightSource implements Comparable<LightSource>, Serializable 
                 light.getShape(),
                 light.getFacingOffset(),
                 light.getRadius(),
+                light.getWidth(),
                 light.getArcAngle(),
                 light.getPaint(),
                 lumens == 0 ? 100 : lumens,
@@ -155,6 +164,7 @@ public final class LightSource implements Comparable<LightSource>, Serializable 
         this.id,
         Objects.requireNonNullElse(this.type, Type.NORMAL),
         this.scaleWithToken,
+        this.ignoresVBL,
         ImmutableList.copyOf(lights));
   }
 
@@ -202,6 +212,54 @@ public final class LightSource implements Comparable<LightSource>, Serializable 
     return scaleWithToken;
   }
 
+  public boolean isIgnoresVBL() {
+    return ignoresVBL;
+  }
+
+  public record LightArea(Light light, Area area) {}
+
+  public @Nonnull List<LightArea> getLightAreas(
+      @Nonnull Token token, @Nonnull Zone zone, double multiplier) {
+    // Tracks the cumulative inner ranges of light sources so that we can cut them out of the
+    // outer ranges and end up with disjoint sets, even when magnifying.
+    // Note that this "hole punching" has nothing to do with lumen strength, it's just a way of
+    // making smaller ranges act as lower bounds for larger ranges.
+
+    // Auras do not get magnified.
+    if (type != Type.NORMAL) {
+      multiplier = 1.0;
+    }
+
+    final var result = new ArrayList<LightArea>();
+    final var cummulativeNotTransformedArea = new Area();
+
+    for (final var light : lightList) {
+      final var notScaledLightArea = light.getArea(token, zone, scaleWithToken);
+
+      final var lightArea = light.getArea(token, zone, multiplier, scaleWithToken);
+      lightArea.subtract(cummulativeNotTransformedArea);
+      result.add(new LightArea(light, lightArea));
+
+      cummulativeNotTransformedArea.add(notScaledLightArea);
+    }
+    return result;
+  }
+
+  /* Area for all lights combined */
+  public @Nonnull Area getArea(@Nonnull Token token, @Nonnull Zone zone, double multiplier) {
+    // Auras do not get magnified.
+    if (type != Type.NORMAL) {
+      multiplier = 1.0;
+    }
+
+    Area area = new Area();
+    for (Light light : lightList) {
+      area.add(light.getArea(token, zone, multiplier, isScaleWithToken()));
+    }
+
+    return area;
+  }
+
   /*
    * Area for a single light, subtracting any previous lights
    */
@@ -218,12 +276,7 @@ public final class LightSource implements Comparable<LightSource>, Serializable 
 
   /* Area for all lights combined */
   public @Nonnull Area getArea(@Nonnull Token token, @Nonnull Zone zone) {
-    Area area = new Area();
-    for (Light light : lightList) {
-      area.add(light.getArea(token, zone, isScaleWithToken()));
-    }
-
-    return area;
+    return getArea(token, zone, 1.0);
   }
 
   @SuppressWarnings("unchecked")
@@ -266,6 +319,7 @@ public final class LightSource implements Comparable<LightSource>, Serializable 
         dto.hasId() ? GUID.valueOf(dto.getId().getValue()) : null,
         Type.valueOf(dto.getType().name()),
         dto.getScaleWithToken(),
+        dto.getIgnoresVBL(),
         dto.getLightsList().stream().map(Light::fromDto).collect(ImmutableList.toImmutableList()));
   }
 
@@ -280,6 +334,7 @@ public final class LightSource implements Comparable<LightSource>, Serializable 
     }
     dto.setType(LightSourceDto.LightTypeDto.valueOf(type.name()));
     dto.setScaleWithToken(scaleWithToken);
+    dto.setIgnoresVBL(ignoresVBL);
     return dto.build();
   }
 }

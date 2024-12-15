@@ -21,10 +21,15 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.geom.Area;
 import java.awt.geom.GeneralPath;
+import java.awt.geom.Path2D;
+import java.awt.geom.PathIterator;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import javax.annotation.Nonnull;
 import net.rptools.maptool.model.GUID;
+import net.rptools.maptool.model.Zone;
 import net.rptools.maptool.server.Mapper;
 import net.rptools.maptool.server.proto.drawing.DrawableDto;
 import net.rptools.maptool.server.proto.drawing.LineSegmentDrawableDto;
@@ -51,6 +56,43 @@ public class LineSegment extends AbstractDrawing {
     this.squareCap = squareCap;
   }
 
+  public LineSegment(LineSegment other) {
+    super(other);
+    this.width = other.width;
+    this.squareCap = other.squareCap;
+
+    for (final var point : other.points) {
+      this.points.add(new Point(point));
+    }
+  }
+
+  public LineSegment(float width, boolean squareCap, Path2D path) {
+    this.width = width;
+    this.squareCap = squareCap;
+
+    // Assume an unbroken line string.
+    double[] coordinates = new double[6];
+    for (var it = path.getPathIterator(null); !it.isDone(); it.next()) {
+      var type = it.currentSegment(coordinates);
+      // type will be SEG_MOVETO or SEG_LINETO or SEG_CLOSE. The first two mean the same to
+      // us, while the latter ends the line.
+      if (type == PathIterator.SEG_CLOSE) {
+        // Should not be possible to be empty, but can't hurt to check.
+        if (!points.isEmpty()) {
+          addPoint(points.getFirst());
+        }
+        break;
+      } else {
+        addPoint((int) coordinates[0], (int) coordinates[1]);
+      }
+    }
+  }
+
+  @Override
+  public Drawable copy() {
+    return new LineSegment(this);
+  }
+
   @SuppressWarnings("ConstantValue")
   private Object readResolve() {
     if (width == null) {
@@ -61,23 +103,39 @@ public class LineSegment extends AbstractDrawing {
   }
 
   /**
-   * Manipulate the points by calling {@link #getPoints} and then adding {@link Point} objects to
-   * the returned {@link List}.
+   * Add a point to the line.
    *
+   * @param x
+   * @param y
+   */
+  public void addPoint(int x, int y) {
+    area = null;
+    points.add(new Point(x, y));
+  }
+
+  /**
+   * Add a point to the line.
+   *
+   * @param point
+   * @see #addPoint(int, int)
+   */
+  public void addPoint(Point point) {
+    addPoint(point.x, point.y);
+  }
+
+  /**
    * @return the list of point
    */
   public List<Point> getPoints() {
-    // This is really, really ugly, but we need to flush the area on any change to the shape
-    // and typically the reason for calling this method is to change the list
-    area = null;
-    return points;
+    return Collections.unmodifiableList(points);
   }
 
-  public Area getArea() {
+  @Override
+  public @Nonnull Area getArea(Zone zone) {
     if (area == null) {
       area = createLineArea();
     }
-    return area;
+    return Objects.requireNonNullElseGet(area, Area::new);
   }
 
   @Override
@@ -90,12 +148,27 @@ public class LineSegment extends AbstractDrawing {
 
     if (getName() != null) dto.setName(StringValue.of(getName()));
 
-    getPoints().forEach(p -> dto.addPoints(Mapper.map(p)));
+    points.forEach(p -> dto.addPoints(Mapper.map(p)));
     return DrawableDto.newBuilder().setLineSegment(dto).build();
   }
 
+  public static LineSegment fromDto(LineSegmentDrawableDto dto) {
+    var id = GUID.valueOf(dto.getId());
+    var drawable = new LineSegment(id, dto.getWidth(), dto.getSquareCap());
+    var points = drawable.points;
+    var pointDtos = dto.getPointsList();
+    pointDtos.forEach(p -> points.add(Mapper.map(p)));
+    if (dto.hasName()) {
+      drawable.setName(dto.getName().getValue());
+    }
+    drawable.setLayer(Zone.Layer.valueOf(dto.getLayer()));
+    return drawable;
+  }
+
   private Area createLineArea() {
-    if (points.size() < 1) return null;
+    if (points.size() < 1) {
+      return null;
+    }
     GeneralPath gp = null;
     for (Point point : points) {
       if (gp == null) {
@@ -110,24 +183,20 @@ public class LineSegment extends AbstractDrawing {
   }
 
   @Override
-  protected void draw(Graphics2D g) {
+  protected void draw(Zone zone, Graphics2D g) {
     width = ((BasicStroke) g.getStroke()).getLineWidth();
     squareCap = ((BasicStroke) g.getStroke()).getEndCap() == BasicStroke.CAP_SQUARE;
-    Area area = getArea();
-    if (area != null) g.fill(area);
+    Area area = getArea(zone);
+    g.fill(area);
   }
 
   @Override
-  protected void drawBackground(Graphics2D g) {
+  protected void drawBackground(Zone zone, Graphics2D g) {
     // do nothing
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see net.rptools.maptool.model.drawing.Drawable#getBounds()
-   */
-  public Rectangle getBounds() {
+  @Override
+  public Rectangle getBounds(Zone zone) {
     if (lastPointCount == points.size()) {
       return cachedBounds;
     }

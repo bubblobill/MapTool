@@ -229,27 +229,25 @@ public class MapFunctions extends AbstractFunction {
         final var gridType =
             gridConfig.has("type")
                 ? gridConfig.getAsJsonPrimitive("type").getAsString()
-                : AppPreferences.getDefaultGridType();
-        final var grid =
-            GridFactory.createGrid(
-                gridType, AppPreferences.getFaceEdge(), AppPreferences.getFaceVertex());
+                : AppPreferences.defaultGridType.get();
+        final var grid = GridFactory.createGrid(gridType);
 
         final var gridColor =
             gridConfig.has("color")
                 ? MapToolUtil.getColor(gridConfig.getAsJsonPrimitive("color").getAsString())
-                : AppPreferences.getDefaultGridColor();
+                : AppPreferences.defaultGridColor.get();
         newMap.setGridColor(gridColor.getRGB());
 
         final var gridUnitsPerCell =
             gridConfig.has("units per cell")
                 ? gridConfig.getAsJsonPrimitive("units per cell").getAsDouble()
-                : AppPreferences.getDefaultUnitsPerCell();
+                : AppPreferences.defaultUnitsPerCell.get();
         newMap.setUnitsPerCell(gridUnitsPerCell);
 
         final var gridSize =
             gridConfig.has("size")
                 ? gridConfig.getAsJsonPrimitive("size").getAsInt()
-                : AppPreferences.getDefaultGridSize();
+                : AppPreferences.defaultGridSize.get();
         grid.setSize(gridSize);
 
         final var gridOffsetX =
@@ -285,7 +283,6 @@ public class MapFunctions extends AbstractFunction {
           throw new ParserException(
               I18N.getText("macro.function.map.invalidAsset", functionName, mapAssetId));
         }
-
         final var mapAsset = AssetManager.getAsset(mapAssetKey);
         if (mapAsset != null) {
           AssetManager.putAsset(mapAsset);
@@ -409,10 +406,11 @@ public class MapFunctions extends AbstractFunction {
       switch (parameters.get(0).toString().toLowerCase()) {
         case "off" -> MapTool.serverCommand().setVisionType(currentZR.getId(), Zone.VisionType.OFF);
         case "day" -> MapTool.serverCommand().setVisionType(currentZR.getId(), Zone.VisionType.DAY);
-        case "night" -> MapTool.serverCommand()
-            .setVisionType(currentZR.getId(), Zone.VisionType.NIGHT);
-        default -> throw new ParserException(
-            I18N.getText("macro.function.general.argumentTypeInvalid", functionName));
+        case "night" ->
+            MapTool.serverCommand().setVisionType(currentZR.getId(), Zone.VisionType.NIGHT);
+        default ->
+            throw new ParserException(
+                I18N.getText("macro.function.general.argumentTypeInvalid", functionName));
       }
       return "";
     } else if ("getMapVision".equalsIgnoreCase(functionName)) {

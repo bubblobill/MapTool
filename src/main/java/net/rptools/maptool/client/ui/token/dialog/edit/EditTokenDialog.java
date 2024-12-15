@@ -87,6 +87,7 @@ import net.rptools.maptool.model.sheet.stats.StatSheetProperties;
 import net.rptools.maptool.util.ExtractHeroLab;
 import net.rptools.maptool.util.FunctionUtil;
 import net.rptools.maptool.util.ImageManager;
+import net.rptools.maptool.util.LightSyntax;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
@@ -172,6 +173,10 @@ public class EditTokenDialog extends AbeillePanel<Token> {
     EnumSet.allOf(TerrainModifierOperation.class).forEach(operationModel::addElement);
   }
 
+  public void initUniqueLightSourcesTextPane() {
+    setUniqueLightSourcesEnabled(MapTool.getPlayer().isGM());
+  }
+
   public void initJtsMethodComboBox() {
     getJtsMethodComboBox().setModel(new DefaultComboBoxModel<>(JTS_SimplifyMethodType.values()));
   }
@@ -200,6 +205,8 @@ public class EditTokenDialog extends AbeillePanel<Token> {
     getRootPane().setDefaultButton(getOKButton());
     setGmNotesEnabled(MapTool.getPlayer().isGM());
     getComponent("@GMName").setEnabled(MapTool.getPlayer().isGM());
+
+    setUniqueLightSourcesEnabled(MapTool.getPlayer().isGM());
 
     dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
 
@@ -370,6 +377,9 @@ public class EditTokenDialog extends AbeillePanel<Token> {
                 .stream()
                 .mapToInt(Integer::valueOf)
                 .toArray());
+
+    getUniqueLightSourcesTextPane()
+        .setText(new LightSyntax().stringifyLights(token.getUniqueLightSources()));
 
     // Jamz: Init the Topology tab...
     JTabbedPane tabbedPane = getTabbedPane();
@@ -709,6 +719,15 @@ public class EditTokenDialog extends AbeillePanel<Token> {
     return (JList<TerrainModifierOperation>) getComponent("terrainModifiersIgnored");
   }
 
+  public void setUniqueLightSourcesEnabled(boolean enabled) {
+    getUniqueLightSourcesTextPane().setEnabled(enabled);
+    getLabel("uniqueLightSourcesLabel").setEnabled(enabled);
+  }
+
+  public JTextPane getUniqueLightSourcesTextPane() {
+    return (JTextPane) getComponent("uniqueLightSources");
+  }
+
   public JLabel getLibTokenURIErrorLabel() {
     return (JLabel) getComponent("Label.LibURIError");
   }
@@ -782,6 +801,14 @@ public class EditTokenDialog extends AbeillePanel<Token> {
 
     token.setTerrainModifiersIgnored(
         new HashSet<>(getTerrainModifiersIgnoredList().getSelectedValuesList()));
+
+    var uniqueLightSources =
+        new LightSyntax()
+            .parseLights(getUniqueLightSourcesTextPane().getText(), token.getUniqueLightSources());
+    token.removeAllUniqueLightsources();
+    for (var lightSource : uniqueLightSources.values()) {
+      token.addUniqueLightSource(lightSource);
+    }
 
     // Get the states
     Component[] stateComponents = getStatesPanel().getComponents();
@@ -886,7 +913,7 @@ public class EditTokenDialog extends AbeillePanel<Token> {
 
     // TOPOLOGY
     for (final var type : Zone.TopologyType.values()) {
-      token.setTopology(type, getTokenTopologyPanel().getTopology(type));
+      token.setMaskTopology(type, getTokenTopologyPanel().getTopology(type));
     }
     token.setIsAlwaysVisible(getAlwaysVisibleButton().isSelected());
     token.setAlwaysVisibleTolerance((int) getVisibilityToleranceSpinner().getValue());
@@ -913,7 +940,10 @@ public class EditTokenDialog extends AbeillePanel<Token> {
     MapTool.getFrame().resetTokenPanels();
 
     // Jamz: TODO check if topology changed on token first
-    MapTool.getFrame().getCurrentZoneRenderer().getZone().tokenTopologyChanged();
+    MapTool.getFrame()
+        .getCurrentZoneRenderer()
+        .getZone()
+        .tokenMaskTopologyChanged(token.getMaskTopologyTypes());
     return true;
   }
 
@@ -1210,6 +1240,7 @@ public class EditTokenDialog extends AbeillePanel<Token> {
 
   public void initTokenLayoutPanel() {
     TokenLayoutPanel layoutPanel = new TokenLayoutPanel();
+    layoutPanel.setMinimumSize(new Dimension(150, 125));
     layoutPanel.setPreferredSize(new Dimension(150, 125));
     layoutPanel.setName("tokenLayout");
 
@@ -1218,6 +1249,7 @@ public class EditTokenDialog extends AbeillePanel<Token> {
 
   public void initCharsheetPanel() {
     ImageAssetPanel panel = new ImageAssetPanel();
+    panel.setMinimumSize(new Dimension(150, 125));
     panel.setPreferredSize(new Dimension(150, 125));
     panel.setName("charsheet");
     panel.setLayout(new GridLayout());
@@ -1227,6 +1259,7 @@ public class EditTokenDialog extends AbeillePanel<Token> {
 
   public void initPortraitPanel() {
     ImageAssetPanel panel = new ImageAssetPanel();
+    panel.setMinimumSize(new Dimension(150, 125));
     panel.setPreferredSize(new Dimension(150, 125));
     panel.setName("portrait");
     panel.setLayout(new GridLayout());
@@ -1340,11 +1373,12 @@ public class EditTokenDialog extends AbeillePanel<Token> {
                 for (final var type : Zone.TopologyType.values()) {
                   final var topology = getTokenTopologyPanel().getTopology(type);
                   if (topology != null) {
-                    TokenVBL.renderTopology(
-                        MapTool.getFrame().getCurrentZoneRenderer(),
-                        getTokenTopologyPanel().getToken().getTransformedTopology(topology),
-                        false,
-                        type);
+                    MapTool.serverCommand()
+                        .updateMaskTopology(
+                            MapTool.getFrame().getCurrentZoneRenderer().getZone(),
+                            getTokenTopologyPanel().getToken().getTransformedMaskTopology(topology),
+                            false,
+                            type);
                   }
                 }
 
@@ -1358,24 +1392,18 @@ public class EditTokenDialog extends AbeillePanel<Token> {
     getTransferTopologyFromMap()
         .addActionListener(
             e -> {
+              var zone = MapTool.getFrame().getCurrentZoneRenderer().getZone();
+              var token = getTokenTopologyPanel().getToken();
               final boolean removeFromMap = getCopyOrMoveCheckbox().isSelected();
               for (final var type : getTokenTopologyPanel().getSelectedTopologyTypes()) {
-                Area mapTopology =
-                    TokenVBL.getMapTopology_transformed(
-                        MapTool.getFrame().getCurrentZoneRenderer(),
-                        getTokenTopologyPanel().getToken(),
-                        type);
+                Area mapTopology = TokenVBL.getTopology_underToken(zone, token, type);
+                Area newTokenTopology =
+                    TokenVBL.transformTopology_toToken(zone, token, mapTopology);
 
-                getTokenTopologyPanel().putCustomTopology(type, mapTopology);
+                getTokenTopologyPanel().putCustomTopology(type, newTokenTopology);
 
                 if (removeFromMap) {
-                  Area topologyToDelete =
-                      TokenVBL.getTopology_underToken(
-                          MapTool.getFrame().getCurrentZoneRenderer(),
-                          getTokenTopologyPanel().getToken(),
-                          type);
-                  TokenVBL.renderTopology(
-                      MapTool.getFrame().getCurrentZoneRenderer(), topologyToDelete, true, type);
+                  MapTool.serverCommand().updateMaskTopology(zone, mapTopology, true, type);
                 }
               }
 
@@ -1562,7 +1590,7 @@ public class EditTokenDialog extends AbeillePanel<Token> {
     // Set the color style via Theme
     try {
       File themeFile =
-          new File(AppConstants.THEMES_DIR, AppPreferences.getDefaultMacroEditorTheme() + ".xml");
+          new File(AppConstants.THEMES_DIR, AppPreferences.defaultMacroEditorTheme.get() + ".xml");
       Theme theme = Theme.load(new FileInputStream(themeFile));
       theme.apply(xmlStatblockRSyntaxTextArea);
 
@@ -1584,7 +1612,7 @@ public class EditTokenDialog extends AbeillePanel<Token> {
     // Set the color style via Theme
     try {
       File themeFile =
-          new File(AppConstants.THEMES_DIR, AppPreferences.getDefaultMacroEditorTheme() + ".xml");
+          new File(AppConstants.THEMES_DIR, AppPreferences.defaultMacroEditorTheme.get() + ".xml");
       Theme theme = Theme.load(new FileInputStream(themeFile));
       theme.apply(textStatblockRSyntaxTextArea);
 
@@ -1893,7 +1921,8 @@ public class EditTokenDialog extends AbeillePanel<Token> {
       // Set the color style via Theme
       try {
         File themeFile =
-            new File(AppConstants.THEMES_DIR, AppPreferences.getDefaultMacroEditorTheme() + ".xml");
+            new File(
+                AppConstants.THEMES_DIR, AppPreferences.defaultMacroEditorTheme.get() + ".xml");
         Theme theme = Theme.load(new FileInputStream(themeFile));
         theme.apply(j);
 
@@ -1961,7 +1990,8 @@ public class EditTokenDialog extends AbeillePanel<Token> {
       // Set the color style via Theme
       try {
         File themeFile =
-            new File(AppConstants.THEMES_DIR, AppPreferences.getDefaultMacroEditorTheme() + ".xml");
+            new File(
+                AppConstants.THEMES_DIR, AppPreferences.defaultMacroEditorTheme.get() + ".xml");
         Theme theme = Theme.load(new FileInputStream(themeFile));
         theme.apply(this);
 

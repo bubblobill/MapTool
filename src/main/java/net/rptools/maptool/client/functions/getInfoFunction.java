@@ -26,8 +26,10 @@ import java.util.*;
 import java.util.List;
 import java.util.concurrent.ConcurrentSkipListSet;
 import javax.swing.*;
+import net.rptools.maptool.client.AppConstants;
 import net.rptools.maptool.client.AppPreferences;
 import net.rptools.maptool.client.MapTool;
+import net.rptools.maptool.client.MapToolExpressionParser;
 import net.rptools.maptool.client.ui.htmlframe.HTMLDialog;
 import net.rptools.maptool.client.ui.htmlframe.HTMLFrame;
 import net.rptools.maptool.client.ui.htmlframe.HTMLOverlayManager;
@@ -41,6 +43,7 @@ import net.rptools.maptool.model.GridFactory;
 import net.rptools.maptool.model.Light;
 import net.rptools.maptool.model.LightSource;
 import net.rptools.maptool.model.LookupTable;
+import net.rptools.maptool.model.ShapeType;
 import net.rptools.maptool.model.SightType;
 import net.rptools.maptool.model.Token;
 import net.rptools.maptool.model.Zone;
@@ -105,10 +108,28 @@ public class getInfoFunction extends AbstractFunction {
       return getThemeInfo();
     } else if (infoType.equalsIgnoreCase("debug")) {
       return getDebugInfo();
+    } else if (infoType.equalsIgnoreCase("functions")) {
+      return getFunctionLists();
     } else {
       throw new ParserException(
           I18N.getText("macro.function.getInfo.invalidArg", param.get(0).toString()));
     }
+  }
+
+  private JsonObject getFunctionLists() {
+    UserDefinedMacroFunctions UDF = UserDefinedMacroFunctions.getInstance();
+    JsonObject udfList = new JsonObject();
+    for (String name : UDF.getAliases()) {
+      udfList.addProperty(name, UDF.getFunctionLocation(name));
+    }
+    JsonArray fList = new JsonArray();
+    MapToolExpressionParser.getMacroFunctions()
+        .forEach(function -> Arrays.stream(function.getAliases()).forEach(fList::add));
+
+    JsonObject fInfo = new JsonObject();
+    fInfo.add("functions", fList);
+    fInfo.add("user defined functions", udfList);
+    return fInfo;
   }
 
   /**
@@ -197,17 +218,19 @@ public class getInfoFunction extends AbstractFunction {
   private JsonObject getClientInfo() {
     JsonObject cinfo = new JsonObject();
 
-    cinfo.addProperty("face edge", FunctionUtil.getDecimalForBoolean(AppPreferences.getFaceEdge()));
     cinfo.addProperty(
-        "face vertex", FunctionUtil.getDecimalForBoolean(AppPreferences.getFaceVertex()));
-    cinfo.addProperty("portrait size", AppPreferences.getPortraitSize());
-    cinfo.addProperty("show portrait", AppPreferences.getShowPortrait());
-    cinfo.addProperty("show stat sheet", AppPreferences.getShowStatSheet());
-    cinfo.addProperty("file sync directory", AppPreferences.getFileSyncPath());
-    cinfo.addProperty("show avatar in chat", AppPreferences.getShowAvatarInChat());
+        "face edge", FunctionUtil.getDecimalForBoolean(AppPreferences.faceEdge.get()));
     cinfo.addProperty(
-        "suppress tooltips for macroLinks", AppPreferences.getSuppressToolTipsForMacroLinks());
-    cinfo.addProperty("use tooltips for inline rolls", AppPreferences.getUseToolTipForInlineRoll());
+        "face vertex", FunctionUtil.getDecimalForBoolean(AppPreferences.faceVertex.get()));
+    cinfo.addProperty("portrait size", AppPreferences.portraitSize.get());
+    cinfo.addProperty("show portrait", AppPreferences.showPortrait.get());
+    cinfo.addProperty("show stat sheet", AppPreferences.showStatSheet.get());
+    cinfo.addProperty("file sync directory", AppPreferences.fileSyncPath.get());
+    cinfo.addProperty("show avatar in chat", AppPreferences.showAvatarInChat.get());
+    cinfo.addProperty(
+        "suppress tooltips for macroLinks", AppPreferences.suppressToolTipsForMacroLinks.get());
+    cinfo.addProperty(
+        "use tooltips for inline rolls", AppPreferences.useToolTipForInlineRoll.get());
     cinfo.addProperty("version", MapTool.getVersion());
     cinfo.addProperty(
         "isFullScreen", FunctionUtil.getDecimalForBoolean(MapTool.getFrame().isFullScreen()));
@@ -238,7 +261,9 @@ public class getInfoFunction extends AbstractFunction {
     ConcurrentSkipListSet<HTMLOverlayManager> registeredOverlays =
         MapTool.getFrame().getOverlayPanel().getOverlays();
     for (HTMLOverlayManager o : registeredOverlays) {
-      overlays.add(o.getName(), o.getProperties());
+      if (!o.getName().startsWith(AppConstants.INTERNAL_FRAME_PREFIX)) {
+        overlays.add(o.getName(), o.getProperties());
+      }
     }
     cinfo.add("overlays", overlays);
 
@@ -351,6 +376,10 @@ public class getInfoFunction extends AbstractFunction {
     }
     cinfo.add("tables", tinfo);
 
+    JsonArray ttinfo = new JsonArray();
+    c.getTokenTypes().forEach(ttinfo::add);
+    cinfo.add("token types", ttinfo);
+
     JsonObject llinfo = new JsonObject();
     for (String ltype : c.getLightSourcesMap().keySet()) {
       JsonArray ltinfo = new JsonArray();
@@ -358,8 +387,9 @@ public class getInfoFunction extends AbstractFunction {
         JsonObject linfo = new JsonObject();
         linfo.addProperty("name", ls.getName());
         linfo.addProperty("max range", ls.getMaxRange());
-        linfo.addProperty("type", ls.getType().toString());
+        linfo.addProperty("type", ls.getType().name());
         linfo.addProperty("scale", ls.isScaleWithToken());
+        linfo.addProperty("ignores-vbl", ls.isIgnoresVBL());
         // List<Light> lights = new ArrayList<Light>();
         // for (Light light : ls.getLightList()) {
         // lights.add(light);
@@ -420,11 +450,28 @@ public class getInfoFunction extends AbstractFunction {
     JsonObject sightInfo = new JsonObject();
     for (SightType sightType : c.getSightTypeMap().values()) {
       JsonObject si = new JsonObject();
-      si.addProperty("arc", sightType.getArc());
-      si.addProperty("distance", sightType.getArc());
+      if (sightType.getShape() == ShapeType.BEAM) {
+        si.addProperty("width", sightType.getWidth());
+        si.addProperty("offset", sightType.getOffset());
+      }
+      if (sightType.getShape() == ShapeType.CONE) {
+        si.addProperty("arc", sightType.getArc());
+        si.addProperty("offset", sightType.getOffset());
+      }
+      si.addProperty("distance", sightType.getDistance());
       si.addProperty("multiplier", sightType.getMultiplier());
-      si.addProperty("shape", sightType.getShape().toString());
-      si.addProperty("type", sightType.getOffset());
+      si.addProperty("shape", sightType.getShape().name());
+      si.addProperty("scale", sightType.isScaleWithToken());
+
+      JsonArray lightList = null;
+      if (sightType.getPersonalLightSource() != null) {
+        lightList = new JsonArray();
+        for (Light light : sightType.getPersonalLightSource().getLightList()) {
+          lightList.add(gson.toJsonTree(light));
+        }
+      }
+      si.add("personal lights", lightList);
+
       sightInfo.add(sightType.getName(), si);
     }
     cinfo.add("sight", sightInfo);

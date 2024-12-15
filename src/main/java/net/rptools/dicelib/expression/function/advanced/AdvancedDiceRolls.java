@@ -41,8 +41,8 @@ public class AdvancedDiceRolls extends AbstractFunction {
       return switch (diceName) {
         case "sw" -> new GenesysDiceRolls().roll(DiceType.StarWars, diceExpression, resolver);
         case "gs" -> new GenesysDiceRolls().roll(DiceType.Genesys, diceExpression, resolver);
-        default -> throw new ParserException(
-            I18N.getText("advanced.roll.unknownDiceType", diceName));
+        default ->
+            throw new ParserException(I18N.getText("advanced.roll.unknownDiceType", diceName));
       };
     } catch (IllegalArgumentException e) {
       throw new ParserException(e.getMessage());

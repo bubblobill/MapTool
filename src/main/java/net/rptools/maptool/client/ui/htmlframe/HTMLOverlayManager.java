@@ -73,6 +73,8 @@ public class HTMLOverlayManager extends HTMLWebViewManager implements HTMLPanelC
   /** The ZOrder of the overlay. */
   private int zOrder;
 
+  private boolean locked;
+
   /** The name of the overlay. */
   private final String name;
 
@@ -82,11 +84,12 @@ public class HTMLOverlayManager extends HTMLWebViewManager implements HTMLPanelC
   /** The map of the macro callbacks. */
   private final Map<String, String> macroCallbacks = new HashMap<>();
 
-  HTMLOverlayManager(String name, int zOrder) {
+  HTMLOverlayManager(String name, int zOrder, boolean locked) {
     super("overlay", name);
     addActionListener(this); // add the action listeners for form events
     this.name = name;
     this.zOrder = zOrder;
+    this.locked = locked;
   }
 
   @Override
@@ -99,6 +102,10 @@ public class HTMLOverlayManager extends HTMLWebViewManager implements HTMLPanelC
    */
   public int getZOrder() {
     return zOrder;
+  }
+
+  public boolean getLocked() {
+    return locked;
   }
 
   /**
@@ -161,7 +168,7 @@ public class HTMLOverlayManager extends HTMLWebViewManager implements HTMLPanelC
    */
   @Override
   String getCSSRule() {
-    return String.format(CSS_BODY, AppPreferences.getFontSize())
+    return String.format(CSS_BODY, AppPreferences.fontSize.get())
         + CSS_SPAN
         + CSS_DIV
         + CSS_POINTERMAP;
@@ -246,7 +253,8 @@ public class HTMLOverlayManager extends HTMLWebViewManager implements HTMLPanelC
   public void remove(Component component) {}
 
   /**
-   * Returns a JsonObject with the properties of the overlay. Includes name, zorder, and visible.
+   * Returns a JsonObject with the properties of the overlay. Includes name, zorder, locked, and
+   * visible.
    *
    * @return the properties
    */
@@ -254,6 +262,7 @@ public class HTMLOverlayManager extends HTMLWebViewManager implements HTMLPanelC
     JsonObject jobj = new JsonObject();
     jobj.addProperty("name", getName());
     jobj.addProperty("zorder", getZOrder());
+    jobj.addProperty("locked", getLocked() ? BigDecimal.ONE : BigDecimal.ZERO);
     jobj.addProperty("visible", isVisible() ? BigDecimal.ONE : BigDecimal.ZERO);
     return jobj;
   }

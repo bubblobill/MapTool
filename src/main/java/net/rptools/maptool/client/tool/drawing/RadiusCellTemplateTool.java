@@ -42,7 +42,7 @@ import net.rptools.maptool.model.drawing.RadiusCellTemplate;
  *
  * @author naciron
  */
-public class RadiusCellTemplateTool extends AbstractDrawingTool implements MouseMotionListener {
+public class RadiusCellTemplateTool extends AbstractTemplateTool implements MouseMotionListener {
   /*---------------------------------------------------------------------------------------------
    * Instance Variables
    *-------------------------------------------------------------------------------------------*/
@@ -217,7 +217,6 @@ public class RadiusCellTemplateTool extends AbstractDrawingTool implements Mouse
     } // endif
     template = createBaseTemplate();
     template.setVertex(vertex);
-    template.setZoneId(renderer.getZone().getId());
     controlOffset = null;
     renderer.repaint();
   }
@@ -313,7 +312,7 @@ public class RadiusCellTemplateTool extends AbstractDrawingTool implements Mouse
       AffineTransform newTransform = g.getTransform();
       newTransform.concatenate(getPaintTransform(renderer));
       g.setTransform(newTransform);
-      template.draw(g, pen);
+      template.draw(renderer.getZone(), g, pen);
       Paint paint = pen.getPaint() != null ? pen.getPaint().getPaint() : null;
       paintCursor(g, paint, pen.getThickness(), template.getVertex());
       g.setTransform(old);
@@ -338,7 +337,7 @@ public class RadiusCellTemplateTool extends AbstractDrawingTool implements Mouse
   /**
    * It is OK to modify the pen returned by this method
    *
-   * @see net.rptools.maptool.client.tool.drawing.AbstractDrawingTool#getPen()
+   * @see AbstractTemplateTool#getPen()
    */
   @Override
   protected Pen getPen() {
@@ -354,7 +353,6 @@ public class RadiusCellTemplateTool extends AbstractDrawingTool implements Mouse
   @Override
   protected void detachFrom(ZoneRenderer renderer) {
     super.detachFrom(renderer);
-    template.setZoneId(null);
     renderer.repaint();
   }
 
@@ -363,7 +361,6 @@ public class RadiusCellTemplateTool extends AbstractDrawingTool implements Mouse
    */
   @Override
   protected void attachTo(ZoneRenderer renderer) {
-    template.setZoneId(renderer.getZone().getId());
     renderer.repaint();
     super.attachTo(renderer);
   }
@@ -412,7 +409,7 @@ public class RadiusCellTemplateTool extends AbstractDrawingTool implements Mouse
       template.setRadius(getRadiusAtMouse(e));
       ZonePoint vertex = template.getVertex();
       ZonePoint newPoint = new ZonePoint(vertex.x, vertex.y);
-      completeDrawable(renderer.getZone().getId(), getPen(), template);
+      completeDrawable(getPen(), template);
       setIsEraser(false);
       resetTool(newPoint);
     }

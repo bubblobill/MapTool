@@ -24,8 +24,6 @@ import java.awt.geom.PathIterator;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
-import net.rptools.maptool.model.*;
-import net.rptools.maptool.model.drawing.*;
 import net.rptools.maptool.server.proto.*;
 import net.rptools.maptool.server.proto.drawing.*;
 import org.apache.logging.log4j.LogManager;
@@ -35,154 +33,35 @@ public class Mapper {
   /** Instance used for log messages. */
   private static final Logger log = LogManager.getLogger(Mapper.class);
 
-  public static Area map(AreaDto areaDto) {
-    var segmentIterator = areaDto.getSegmentsList().iterator();
-    if (!segmentIterator.hasNext()) return new Area();
+  private static PathShapeDto map(PathIterator it) {
+    var builder = PathShapeDto.newBuilder();
 
-    var it =
-        new PathIterator() {
-          private SegmentDto currentSegment = segmentIterator.next();
-
-          @Override
-          public int getWindingRule() {
-            return areaDto.getWindingValue();
-          }
-
-          @Override
-          public boolean isDone() {
-            return !segmentIterator.hasNext();
-          }
-
-          @Override
-          public void next() {
-            currentSegment = segmentIterator.next();
-          }
-
-          @Override
-          public int currentSegment(float[] coords) {
-            switch (currentSegment.getSegmentTypeCase()) {
-              case MOVE_TO -> {
-                var segment = currentSegment.getMoveTo();
-                var point0 = segment.getPoint0();
-                coords[0] = (float) point0.getX();
-                coords[1] = (float) point0.getY();
-                return PathIterator.SEG_MOVETO;
-              }
-              case LINE_TO -> {
-                var segment = currentSegment.getLineTo();
-                var point0 = segment.getPoint0();
-                coords[0] = (float) point0.getX();
-                coords[1] = (float) point0.getY();
-                return PathIterator.SEG_LINETO;
-              }
-              case QUAD_TO -> {
-                var segment = currentSegment.getQuadTo();
-                var point0 = segment.getPoint0();
-                coords[0] = (float) point0.getX();
-                coords[1] = (float) point0.getY();
-                var point1 = segment.getPoint1();
-                coords[2] = (float) point1.getX();
-                coords[3] = (float) point1.getY();
-                return PathIterator.SEG_QUADTO;
-              }
-              case CUBIC_TO -> {
-                var segment = currentSegment.getCubicTo();
-                var point0 = segment.getPoint0();
-                coords[0] = (float) point0.getX();
-                coords[1] = (float) point0.getY();
-                var point1 = segment.getPoint1();
-                coords[2] = (float) point1.getX();
-                coords[3] = (float) point1.getY();
-                var point2 = segment.getPoint2();
-                coords[4] = (float) point2.getX();
-                coords[5] = (float) point2.getY();
-                return PathIterator.SEG_CUBICTO;
-              }
-            }
-            return SEG_CLOSE;
-          }
-
-          @Override
-          public int currentSegment(double[] coords) {
-            switch (currentSegment.getSegmentTypeCase()) {
-              case MOVE_TO -> {
-                var segment = currentSegment.getMoveTo();
-                var point0 = segment.getPoint0();
-                coords[0] = point0.getX();
-                coords[1] = point0.getY();
-                return PathIterator.SEG_MOVETO;
-              }
-              case LINE_TO -> {
-                var segment = currentSegment.getLineTo();
-                var point0 = segment.getPoint0();
-                coords[0] = point0.getX();
-                coords[1] = point0.getY();
-                return PathIterator.SEG_LINETO;
-              }
-              case QUAD_TO -> {
-                var segment = currentSegment.getQuadTo();
-                var point0 = segment.getPoint0();
-                coords[0] = point0.getX();
-                coords[1] = point0.getY();
-                var point1 = segment.getPoint1();
-                coords[2] = point1.getX();
-                coords[3] = point1.getY();
-                return PathIterator.SEG_QUADTO;
-              }
-              case CUBIC_TO -> {
-                var segment = currentSegment.getCubicTo();
-                var point0 = segment.getPoint0();
-                coords[0] = point0.getX();
-                coords[1] = point0.getY();
-                var point1 = segment.getPoint1();
-                coords[2] = point1.getX();
-                coords[3] = point1.getY();
-                var point2 = segment.getPoint2();
-                coords[4] = point2.getX();
-                coords[5] = point2.getY();
-                return PathIterator.SEG_CUBICTO;
-              }
-            }
-            return SEG_CLOSE;
-          }
-        };
-    var path = new Path2D.Float();
-    path.append(it, false);
-    return new Area(path);
-  }
-
-  public static AreaDto map(Area area) {
-    if (area == null) return null;
-
-    var builder = AreaDto.newBuilder();
-
-    var it = area.getPathIterator(null);
-    float[] floats = new float[6];
-    builder.setWinding(AreaDto.WindingRule.forNumber(it.getWindingRule()));
+    double[] coords = new double[6];
+    builder.setWinding(PathShapeDto.WindingRule.forNumber(it.getWindingRule()));
 
     for (; !it.isDone(); it.next()) {
       var segmentBuilder = SegmentDto.newBuilder();
-      switch (it.currentSegment(floats)) {
+      switch (it.currentSegment(coords)) {
         case PathIterator.SEG_MOVETO -> {
-          var point0Builder = DoublePointDto.newBuilder().setX(floats[0]).setY(floats[1]);
+          var point0Builder = DoublePointDto.newBuilder().setX(coords[0]).setY(coords[1]);
           var moveTo = MoveToSegment.newBuilder().setPoint0(point0Builder);
           segmentBuilder.setMoveTo(moveTo);
         }
         case PathIterator.SEG_LINETO -> {
-          var point0Builder = DoublePointDto.newBuilder().setX(floats[0]).setY(floats[1]);
+          var point0Builder = DoublePointDto.newBuilder().setX(coords[0]).setY(coords[1]);
           var lineTo = LineToSegment.newBuilder().setPoint0(point0Builder);
           segmentBuilder.setLineTo(lineTo);
         }
         case PathIterator.SEG_QUADTO -> {
-          var point0Builder = DoublePointDto.newBuilder().setX(floats[0]).setY(floats[1]);
-          var point1Builder = DoublePointDto.newBuilder().setX(floats[2]).setY(floats[3]);
+          var point0Builder = DoublePointDto.newBuilder().setX(coords[0]).setY(coords[1]);
+          var point1Builder = DoublePointDto.newBuilder().setX(coords[2]).setY(coords[3]);
           var quadTo = QuadToSegment.newBuilder().setPoint0(point0Builder).setPoint1(point1Builder);
           segmentBuilder.setQuadTo(quadTo);
         }
         case PathIterator.SEG_CUBICTO -> {
-          var point0Builder = DoublePointDto.newBuilder().setX(floats[0]).setY(floats[1]);
-          var point1Builder = DoublePointDto.newBuilder().setX(floats[2]).setY(floats[3]);
-          var point2Builder = DoublePointDto.newBuilder().setX(floats[4]).setY(floats[5]);
+          var point0Builder = DoublePointDto.newBuilder().setX(coords[0]).setY(coords[1]);
+          var point1Builder = DoublePointDto.newBuilder().setX(coords[2]).setY(coords[3]);
+          var point2Builder = DoublePointDto.newBuilder().setX(coords[4]).setY(coords[5]);
           var cubicTo =
               CubicToSegment.newBuilder()
                   .setPoint0(point0Builder)
@@ -195,6 +74,67 @@ public class Mapper {
       builder.addSegments(segmentBuilder);
     }
 
+    return builder.build();
+  }
+
+  public static Path2D map(PathShapeDto pathShapeDto) {
+    final var segments = pathShapeDto.getSegmentsList();
+    final var path = new Path2D.Double(pathShapeDto.getWindingValue(), segments.size());
+
+    for (final SegmentDto currentSegment : pathShapeDto.getSegmentsList()) {
+      switch (currentSegment.getSegmentTypeCase()) {
+        case MOVE_TO -> {
+          final var segment = currentSegment.getMoveTo();
+          var point = segment.getPoint0();
+          path.moveTo(point.getX(), point.getY());
+        }
+        case LINE_TO -> {
+          final var segment = currentSegment.getLineTo();
+          var point = segment.getPoint0();
+          path.lineTo(point.getX(), point.getY());
+        }
+        case QUAD_TO -> {
+          final var segment = currentSegment.getQuadTo();
+          var point0 = segment.getPoint0();
+          var point1 = segment.getPoint1();
+          path.quadTo(point0.getX(), point0.getY(), point1.getX(), point1.getY());
+        }
+        case CUBIC_TO -> {
+          final var segment = currentSegment.getCubicTo();
+          var point0 = segment.getPoint0();
+          var point1 = segment.getPoint1();
+          var point2 = segment.getPoint2();
+          path.curveTo(
+              point0.getX(),
+              point0.getY(),
+              point1.getX(),
+              point1.getY(),
+              point2.getX(),
+              point2.getY());
+        }
+        case CLOSE -> {
+          path.closePath();
+        }
+      }
+    }
+
+    return path;
+  }
+
+  public static PathShapeDto map(Path2D path) {
+    return map(path.getPathIterator(null));
+  }
+
+  public static Area map(AreaDto areaDto) {
+    return new Area(map(areaDto.getPath()));
+  }
+
+  public static AreaDto map(Area area) {
+    if (area == null) return null;
+
+    var builder = AreaDto.newBuilder();
+    var pathDto = map(area.getPathIterator(null));
+    builder.setPath(pathDto);
     return builder.build();
   }
 
@@ -239,7 +179,10 @@ public class Mapper {
       }
       case ELLIPSE -> {
         var dto = shapeDto.getEllipse();
-        return new Ellipse2D.Float(dto.getX(), dto.getY(), dto.getWidth(), dto.getHeight());
+        return new Ellipse2D.Double(dto.getX(), dto.getY(), dto.getWidth(), dto.getHeight());
+      }
+      case PATH -> {
+        return map(shapeDto.getPath());
       }
       default -> {
         log.warn("unknown ShapeDto type: " + shapeDto.getShapeTypeCase());
@@ -269,14 +212,16 @@ public class Mapper {
         dto.addPoints(pointDto);
       }
       return shapeDto.setPolygon(dto).build();
-    } else if (shape instanceof Ellipse2D.Float ellipse) {
+    } else if (shape instanceof Ellipse2D ellipse) {
       var dto =
           EllipseDto.newBuilder()
-              .setX(ellipse.x)
-              .setY(ellipse.y)
-              .setWidth(ellipse.width)
-              .setHeight(ellipse.height);
+              .setX(ellipse.getX())
+              .setY(ellipse.getY())
+              .setWidth(ellipse.getWidth())
+              .setHeight(ellipse.getHeight());
       return shapeDto.setEllipse(dto).build();
+    } else if (shape instanceof Path2D path) {
+      return shapeDto.setPath(map(path)).build();
     } else {
       log.warn("mapping not implemented for Shape type: " + shape.getClass());
       return null;

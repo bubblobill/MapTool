@@ -17,56 +17,19 @@ package net.rptools.maptool.client.functions;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import de.muntjak.tinylookandfeel.TinyComboBoxButton;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Graphics2D;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Image;
-import java.awt.Insets;
-import java.awt.Rectangle;
-import java.awt.Toolkit;
-import java.awt.Transparency;
-import java.awt.event.ComponentAdapter;
-import java.awt.event.ComponentEvent;
-import java.awt.event.FocusEvent;
-import java.awt.event.FocusListener;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import java.awt.*;
+import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.awt.image.ImageObserver;
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import javax.swing.Box;
-import javax.swing.ButtonGroup;
-import javax.swing.Icon;
-import javax.swing.ImageIcon;
-import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
-import javax.swing.JComponent;
-import javax.swing.JDialog;
-import javax.swing.JLabel;
-import javax.swing.JList;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JRadioButton;
-import javax.swing.JScrollBar;
-import javax.swing.JScrollPane;
-import javax.swing.JTabbedPane;
-import javax.swing.JTextField;
-import javax.swing.ListCellRenderer;
-import javax.swing.Scrollable;
+import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.EtchedBorder;
 import javax.swing.border.TitledBorder;
-import net.rptools.lib.MD5Key;
 import net.rptools.maptool.client.MapTool;
 import net.rptools.maptool.client.MapToolVariableResolver;
 import net.rptools.maptool.client.functions.InputFunction.InputType.OptionException;
@@ -74,6 +37,7 @@ import net.rptools.maptool.client.functions.json.JSONMacroFunctions;
 import net.rptools.maptool.client.ui.htmlframe.HTMLPane;
 import net.rptools.maptool.language.I18N;
 import net.rptools.maptool.model.Token;
+import net.rptools.maptool.util.FunctionUtil;
 import net.rptools.maptool.util.ImageManager;
 import net.rptools.maptool.util.StringUtil;
 import net.rptools.parser.Parser;
@@ -128,7 +92,8 @@ import org.apache.commons.lang.StringUtils;
 // @formatter:on
 
 public class InputFunction extends AbstractFunction {
-  private static final Pattern ASSET_PATTERN = Pattern.compile("^(.*)asset://(\\w+)");
+  private static final Pattern ASSET_PATTERN =
+      Pattern.compile("^(.*)((?:asset|lib|Image):(//)?[0-9a-z-A-Z ./]+)");
 
   /** The singleton instance. */
   private static final InputFunction instance = new InputFunction();
@@ -172,10 +137,11 @@ public class InputFunction extends AbstractFunction {
 
       defaultOptions = new OptionMap();
       Pattern pattern =
-          Pattern.compile("(\\w+)=([\\w-,]+)\\;"); // no spaces allowed, semicolon required
+          Pattern.compile("(\\w+)=([\\w-,]+);"); // no spaces allowed, semicolon required
       Matcher matcher = pattern.matcher(nameval);
       while (matcher.find()) {
-        defaultOptions.put(matcher.group(1).toUpperCase(), matcher.group(2).toUpperCase());
+        defaultOptions.put(
+            matcher.group(1).toUpperCase(Locale.ROOT), matcher.group(2).toUpperCase(Locale.ROOT));
       }
     }
 
@@ -200,7 +166,7 @@ public class InputFunction extends AbstractFunction {
      * @return the default value for the passed in option.
      */
     public String getDefault(String option) {
-      return defaultOptions.get(option.toUpperCase());
+      return defaultOptions.get(option.toUpperCase(Locale.ROOT));
     }
 
     /**
@@ -1271,11 +1237,13 @@ public class InputFunction extends AbstractFunction {
   /** Gets icon from the asset manager. Code copied and modified from EditTokenDialog.java */
   private ImageIcon getIcon(String id, int size, ImageObserver io) {
     // Extract the MD5Key from the URL
-    if (id == null) return null;
-    MD5Key assetID = new MD5Key(id);
+    if (id == null) {
+      return null;
+    }
+    var assetMD5 = FunctionUtil.getAssetKeyFromString(id);
 
     // Get the base image && find the new size for the icon
-    BufferedImage assetImage = ImageManager.getImage(assetID, io);
+    BufferedImage assetImage = ImageManager.getImage(assetMD5, io);
 
     // Resize
     if (assetImage.getWidth() > size || assetImage.getHeight() > size) {

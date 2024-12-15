@@ -37,10 +37,12 @@ import net.rptools.maptool.client.swing.ColorWell;
 import net.rptools.maptool.client.swing.SwingUtil;
 import net.rptools.maptool.client.tool.DefaultTool;
 import net.rptools.maptool.client.ui.zone.renderer.ZoneRenderer;
+import net.rptools.maptool.events.MapToolEventBus;
 import net.rptools.maptool.model.CellPoint;
 import net.rptools.maptool.model.Grid;
 import net.rptools.maptool.model.Zone;
 import net.rptools.maptool.model.ZonePoint;
+import net.rptools.maptool.model.zones.GridChanged;
 
 /** */
 public class GridTool extends DefaultTool {
@@ -75,7 +77,8 @@ public class GridTool extends DefaultTool {
     controlPanel = new AbeillePanel(new AdjustGridControlPanelView().getRootComponent());
 
     gridSizeSpinner = (JSpinner) controlPanel.getComponent("gridSize");
-    gridSizeSpinner.setModel(new SpinnerNumberModel());
+    gridSizeSpinner.setModel(
+        new SpinnerNumberModel(100, Grid.MIN_GRID_SIZE, Grid.MAX_GRID_SIZE, 1));
     gridSizeSpinner.addChangeListener(new UpdateGridListener());
 
     gridOffsetXTextField = (JTextField) controlPanel.getComponent("offsetX");
@@ -175,6 +178,8 @@ public class GridTool extends DefaultTool {
     grid.setOffset(getInt(gridOffsetXTextField, 0), getInt(gridOffsetYTextField, 0));
     zone.setGridColor(colorWell.getColor().getRGB());
     grid.setSize(Math.max((Integer) gridSizeSpinner.getValue(), Grid.MIN_GRID_SIZE));
+
+    new MapToolEventBus().getMainEventBus().post(new GridChanged(zone));
   }
 
   @Override
@@ -297,12 +302,6 @@ public class GridTool extends DefaultTool {
     }
   }
 
-  @Override
-  public void mouseMoved(java.awt.event.MouseEvent e) {
-    mouseX = e.getX();
-    mouseY = e.getY();
-  }
-
   ////
   // MOUSE WHEEL LISTENER
   /*
@@ -340,6 +339,29 @@ public class GridTool extends DefaultTool {
         });
   }
 
+  public void moveGridBy(int dx, int dy) {
+    int gridOffsetX = renderer.getZone().getGrid().getOffsetX();
+    int gridOffsetY = renderer.getZone().getGrid().getOffsetY();
+
+    gridOffsetX += dx;
+    gridOffsetY += dy;
+
+    if (gridOffsetY > 0) {
+      gridOffsetY = gridOffsetY - (int) renderer.getZone().getGrid().getCellHeight();
+    }
+    if (gridOffsetX > 0) {
+      gridOffsetX = gridOffsetX - (int) renderer.getZone().getGrid().getCellWidth();
+    }
+    renderer.getZone().getGrid().setOffset(gridOffsetX, gridOffsetY);
+  }
+
+  public void adjustGridSize(int delta) {
+    renderer
+        .getZone()
+        .getGrid()
+        .setSize(Math.max(0, renderer.getZone().getGrid().getSize() + delta));
+  }
+
   private void adjustGridSize(ZoneRenderer renderer, Size direction) {
     CellPoint cell = renderer.getCellAt(new ScreenPoint(mouseX, mouseY));
     if (cell == null) {
@@ -349,19 +371,19 @@ public class GridTool extends DefaultTool {
 
     switch (direction) {
       case Increase:
-        renderer.adjustGridSize(1);
+        adjustGridSize(1);
         updateSecondDimension(renderer.getZone().getGrid(), true);
 
         if (renderer.getZone().getGrid().getSize() != oldGridSize) {
-          renderer.moveGridBy(-cell.x, -cell.y);
+          moveGridBy(-cell.x, -cell.y);
         }
         break;
       case Decrease:
-        renderer.adjustGridSize(-1);
+        adjustGridSize(-1);
         updateSecondDimension(renderer.getZone().getGrid(), true);
 
         if (renderer.getZone().getGrid().getSize() != oldGridSize) {
-          renderer.moveGridBy(cell.x, cell.y);
+          moveGridBy(cell.x, cell.y);
         }
         break;
     }
@@ -404,16 +426,16 @@ public class GridTool extends DefaultTool {
       ZoneRenderer renderer = (ZoneRenderer) e.getSource();
       switch (direction) {
         case Left:
-          renderer.moveGridBy(-1, 0);
+          moveGridBy(-1, 0);
           break;
         case Right:
-          renderer.moveGridBy(1, 0);
+          moveGridBy(1, 0);
           break;
         case Up:
-          renderer.moveGridBy(0, -1);
+          moveGridBy(0, -1);
           break;
         case Down:
-          renderer.moveGridBy(0, 1);
+          moveGridBy(0, 1);
           break;
       }
       copyGridToControlPanel();

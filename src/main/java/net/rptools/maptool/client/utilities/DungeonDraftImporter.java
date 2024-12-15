@@ -20,6 +20,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.jidesoft.utils.Base64;
 import java.awt.BasicStroke;
+import java.awt.Color;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Area;
 import java.awt.geom.GeneralPath;
@@ -28,7 +29,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.math.BigDecimal;
+import java.util.List;
 import net.rptools.maptool.client.MapTool;
 import net.rptools.maptool.client.ui.mappropertiesdialog.MapPropertiesDialog;
 import net.rptools.maptool.client.ui.theme.Images;
@@ -36,11 +37,16 @@ import net.rptools.maptool.client.ui.theme.RessourceManager;
 import net.rptools.maptool.language.I18N;
 import net.rptools.maptool.model.Asset;
 import net.rptools.maptool.model.AssetManager;
+import net.rptools.maptool.model.GUID;
 import net.rptools.maptool.model.GridFactory;
+import net.rptools.maptool.model.Light;
+import net.rptools.maptool.model.LightSource;
+import net.rptools.maptool.model.ShapeType;
 import net.rptools.maptool.model.Token;
 import net.rptools.maptool.model.Zone;
 import net.rptools.maptool.model.Zone.Layer;
 import net.rptools.maptool.model.ZoneFactory;
+import net.rptools.maptool.model.drawing.DrawableColorPaint;
 import org.apache.commons.io.FilenameUtils;
 
 /** Class for importing Dungeondraft Universal VTT export format. */
@@ -90,6 +96,9 @@ public class DungeonDraftImporter {
 
   /** Height of the Light source icon. */
   private static final int LIGHT_HEIGHT = 20;
+
+  /** Contains environmental details (ambient lighting, baked-in lighting) */
+  public static final String VTT_FIELD_ENVIRONMENT = "environment";
 
   /** Asset to use to represent Light sources. */
   private static final Asset lightSourceAsset =
@@ -203,8 +212,8 @@ public class DungeonDraftImporter {
                     WALL_VBL_STROKE.createStrokedShape(
                         getVBLPath(v.getAsJsonArray(), pixelsPerCell)));
             if (finalDo_transform) vblArea.transform(at);
-            zone.addTopology(vblArea, Zone.TopologyType.WALL_VBL);
-            zone.addTopology(vblArea, Zone.TopologyType.MBL);
+            zone.updateMaskTopology(vblArea, false, Zone.TopologyType.WALL_VBL);
+            zone.updateMaskTopology(vblArea, false, Zone.TopologyType.MBL);
           });
     }
 
@@ -215,8 +224,8 @@ public class DungeonDraftImporter {
           v -> {
             Area vblArea = new Area(getVBLPath(v.getAsJsonArray(), pixelsPerCell));
             if (finalDo_transform) vblArea.transform(at);
-            zone.addTopology(vblArea, Zone.TopologyType.HILL_VBL);
-            zone.addTopology(vblArea, Zone.TopologyType.PIT_VBL);
+            zone.updateMaskTopology(vblArea, false, Zone.TopologyType.HILL_VBL);
+            zone.updateMaskTopology(vblArea, false, Zone.TopologyType.PIT_VBL);
           });
     }
 
@@ -239,15 +248,24 @@ public class DungeonDraftImporter {
               Area vblArea =
                   new Area(DOOR_VBL_STROKE.createStrokedShape(getVBLPath(bounds, pixelsPerCell)));
               if (finalDo_transform) vblArea.transform(at);
-              zone.addTopology(vblArea, Zone.TopologyType.WALL_VBL);
-              zone.addTopology(vblArea, Zone.TopologyType.MBL);
+              zone.updateMaskTopology(vblArea, false, Zone.TopologyType.WALL_VBL);
+              zone.updateMaskTopology(vblArea, false, Zone.TopologyType.MBL);
             }
           });
     }
 
+    boolean bakedLighting = false;
+    if (ddvtt.has(VTT_FIELD_ENVIRONMENT)) {
+      var environment = ddvtt.getAsJsonObject(VTT_FIELD_ENVIRONMENT);
+      var bakedLightingMember = environment.get("baked_lighting");
+      if (bakedLightingMember != null) {
+        bakedLighting = bakedLightingMember.getAsBoolean();
+      }
+    }
+
     JsonArray lights = ddvtt.getAsJsonArray("lights");
     if (lights != null && lights.size() > 0) {
-      placeLights(zone, lights, pixelsPerCell);
+      placeLights(zone, lights, pixelsPerCell, bakedLighting);
     }
 
     // If everything has been successful, we can add the zone to the campaign.
@@ -260,12 +278,16 @@ public class DungeonDraftImporter {
    * @param zone The new {@link Zone} that was created.
    * @param lights The {@link JsonArray} containing the lights.
    * @param pixelsPerCell The number of pixels per grid cell on the map.
+   * @param bakedLighting If {@code true}, define and attach unique lights to each light token.
    */
-  private void placeLights(Zone zone, JsonArray lights, double pixelsPerCell) {
+  private void placeLights(
+      Zone zone, JsonArray lights, double pixelsPerCell, boolean bakedLighting) {
     int lightNo = 1;
     boolean ignoredLights = false;
     for (JsonElement ele : lights) {
-      JsonObject position = ele.getAsJsonObject().getAsJsonObject("position");
+      var lightJson = ele.getAsJsonObject();
+
+      JsonObject position = lightJson.getAsJsonObject("position");
       if (position.has("x") && position.has("y")) {
         Token lightToken = new Token("light-" + lightNo, lightSourceAsset.getMD5Key());
         lightToken.setLayer(Layer.OBJECT);
@@ -278,19 +300,44 @@ public class DungeonDraftImporter {
         lightToken.setX((int) (position.get("x").getAsDouble() * pixelsPerCell) - LIGHT_WIDTH / 2);
         lightToken.setY((int) (position.get("y").getAsDouble() * pixelsPerCell) - LIGHT_HEIGHT / 2);
 
-        JsonObject lightValues = new JsonObject();
-        lightValues.addProperty(
-            "range", ele.getAsJsonObject().getAsJsonPrimitive("range").getAsBigDecimal());
-        lightValues.addProperty(
-            "intensity", ele.getAsJsonObject().getAsJsonPrimitive("intensity").getAsBigDecimal());
-        lightValues.addProperty(
-            "color", ele.getAsJsonObject().getAsJsonPrimitive("color").getAsString());
-        lightValues.addProperty(
-            "shadows",
-            ele.getAsJsonObject().getAsJsonPrimitive("shadows").getAsBoolean()
-                ? BigDecimal.ONE
-                : BigDecimal.ZERO);
-        lightToken.setGMNotes(lightValues.toString());
+        // If lighting is baked in, produce a clear light.
+        Color color;
+        if (bakedLighting) {
+          color = null;
+        } else {
+          color =
+              new Color(
+                  Integer.parseUnsignedInt(
+                      lightJson.getAsJsonPrimitive("color").getAsString(), 16));
+        }
+
+        var light =
+            new Light(
+                ShapeType.CIRCLE,
+                0.,
+                // Range is measured in cells.
+                lightJson.getAsJsonPrimitive("range").getAsDouble() * zone.getUnitsPerCell(),
+                0.,
+                0.,
+                color == null ? null : new DrawableColorPaint(color),
+                100,
+                false,
+                false);
+        var lightSource =
+            LightSource.createRegular(
+                "uvtt-imported",
+                new GUID(),
+                LightSource.Type.NORMAL,
+                false,
+                // "shadows" means whether the light respects light blocking.
+                !lightJson.getAsJsonPrimitive("shadows").getAsBoolean(),
+                List.of(light));
+        // Install the light source...
+        lightToken.addUniqueLightSource(lightSource);
+        // ... and activate it immediately.
+        lightToken.addLightSource(lightSource.getId());
+
+        lightToken.setGMNotes(ele.toString());
 
         zone.putToken(lightToken);
         lightNo++;

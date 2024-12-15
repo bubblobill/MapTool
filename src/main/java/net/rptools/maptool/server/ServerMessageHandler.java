@@ -37,6 +37,7 @@ import net.rptools.maptool.model.Zone.VisionType;
 import net.rptools.maptool.model.drawing.Drawable;
 import net.rptools.maptool.model.drawing.DrawnElement;
 import net.rptools.maptool.model.drawing.Pen;
+import net.rptools.maptool.model.topology.WallTopology;
 import net.rptools.maptool.model.zones.TokensAdded;
 import net.rptools.maptool.model.zones.TokensRemoved;
 import net.rptools.maptool.model.zones.ZoneAdded;
@@ -78,8 +79,8 @@ public class ServerMessageHandler implements MessageHandler {
       }
 
       switch (msgType) {
-        case ADD_TOPOLOGY_MSG -> {
-          handle(msg.getAddTopologyMsg());
+        case UPDATE_MASK_TOPOLOGY_MSG -> {
+          handle(msg.getUpdateMaskTopologyMsg());
           sendToClients(id, msg);
         }
         case BRING_TOKENS_TO_FRONT_MSG -> handle(msg.getBringTokensToFrontMsg());
@@ -105,28 +106,29 @@ public class ServerMessageHandler implements MessageHandler {
           sendToClients(id, msg);
         }
         case ENFORCE_NOTIFICATION_MSG,
-            ENFORCE_ZONE_MSG,
-            ENFORCE_ZONE_VIEW_MSG,
-            EXEC_LINK_MSG,
-            EXEC_FUNCTION_MSG,
-            MESSAGE_MSG,
-            SET_BOARD_MSG,
-            RESTORE_ZONE_VIEW_MSG,
-            SET_LIVE_TYPING_LABEL_MSG,
-            SET_TOKEN_LOCATION_MSG,
-            START_TOKEN_MOVE_MSG,
-            STOP_TOKEN_MOVE_MSG,
-            TOGGLE_TOKEN_MOVE_WAYPOINT_MSG,
-            UPDATE_TOKEN_MOVE_MSG,
-            ADD_ADD_ON_LIBRARY_MSG,
-            REMOVE_ADD_ON_LIBRARY_MSG,
-            REMOVE_ALL_ADD_ON_LIBRARIES_MSG,
-            UPDATE_DATA_STORE_MSG,
-            UPDATE_DATA_NAMESPACE_MSG,
-            UPDATE_DATA_MSG,
-            REMOVE_DATA_MSG,
-            REMOVE_DATA_NAMESPACE_MSG,
-            REMOVE_DATA_STORE_MSG -> sendToClients(id, msg);
+                ENFORCE_ZONE_MSG,
+                ENFORCE_ZONE_VIEW_MSG,
+                EXEC_LINK_MSG,
+                EXEC_FUNCTION_MSG,
+                MESSAGE_MSG,
+                SET_BOARD_MSG,
+                RESTORE_ZONE_VIEW_MSG,
+                SET_LIVE_TYPING_LABEL_MSG,
+                SET_TOKEN_LOCATION_MSG,
+                START_TOKEN_MOVE_MSG,
+                STOP_TOKEN_MOVE_MSG,
+                TOGGLE_TOKEN_MOVE_WAYPOINT_MSG,
+                UPDATE_TOKEN_MOVE_MSG,
+                ADD_ADD_ON_LIBRARY_MSG,
+                REMOVE_ADD_ON_LIBRARY_MSG,
+                REMOVE_ALL_ADD_ON_LIBRARIES_MSG,
+                UPDATE_DATA_STORE_MSG,
+                UPDATE_DATA_NAMESPACE_MSG,
+                UPDATE_DATA_MSG,
+                REMOVE_DATA_MSG,
+                REMOVE_DATA_NAMESPACE_MSG,
+                REMOVE_DATA_STORE_MSG ->
+            sendToClients(id, msg);
         case EXPOSE_FOW_MSG -> {
           handle(msg.getExposeFowMsg());
           sendToClients(id, msg);
@@ -171,10 +173,6 @@ public class ServerMessageHandler implements MessageHandler {
           handle(msg.getRemoveTokensMsg());
           sendToClients(id, msg);
         }
-        case REMOVE_TOPOLOGY_MSG -> {
-          handle(msg.getRemoveTopologyMsg());
-          sendToClients(id, msg);
-        }
         case REMOVE_ZONE_MSG -> {
           handle(msg.getRemoveZoneMsg());
           sendToClients(id, msg);
@@ -190,6 +188,10 @@ public class ServerMessageHandler implements MessageHandler {
         }
         case SET_CAMPAIGN_NAME_MSG -> {
           handle(msg.getSetCampaignNameMsg());
+          sendToClients(id, msg);
+        }
+        case SET_CAMPAIGN_LANDING_MAP_MSG -> {
+          handle(msg.getSetCampaignLandingMapMsg());
           sendToClients(id, msg);
         }
         case SET_FOW_MSG -> {
@@ -256,6 +258,10 @@ public class ServerMessageHandler implements MessageHandler {
           handle(id, msg.getUpdatePlayerStatusMsg());
           sendToClients(id, msg);
         }
+        case SET_WALL_TOPOLOGY_MSG -> {
+          handle(msg.getSetWallTopologyMsg());
+          sendToClients(id, msg);
+        }
 
         default -> log.warn(msgType + " not handled.");
       }
@@ -282,7 +288,6 @@ public class ServerMessageHandler implements MessageHandler {
               msg.getMacrosList().stream()
                   .map(MacroButtonProperties::fromDto)
                   .collect(Collectors.toList());
-          MapTool.getCampaign().setGmMacroButtonPropertiesArray(campaignMacros);
           server.getCampaign().setGmMacroButtonPropertiesArray(campaignMacros);
         });
   }
@@ -294,7 +299,6 @@ public class ServerMessageHandler implements MessageHandler {
               msg.getMacrosList().stream()
                   .map(MacroButtonProperties::fromDto)
                   .collect(Collectors.toList());
-          MapTool.getCampaign().setMacroButtonPropertiesArray(campaignMacros);
           server.getCampaign().setMacroButtonPropertiesArray(campaignMacros);
         });
   }
@@ -416,10 +420,12 @@ public class ServerMessageHandler implements MessageHandler {
     EventQueue.invokeLater(
         () -> {
           Zone zone = server.getCampaign().getZone(GUID.valueOf(msg.getZoneGuid()));
-          Grid grid = zone.getGrid();
-          grid.setSize(msg.getSize());
-          grid.setOffset(msg.getXOffset(), msg.getYOffset());
-          zone.setGridColor(msg.getColor());
+          if (zone != null) {
+            Grid grid = zone.getGrid();
+            grid.setSize(msg.getSize());
+            grid.setOffset(msg.getXOffset(), msg.getYOffset());
+            zone.setGridColor(msg.getColor());
+          }
         });
   }
 
@@ -446,6 +452,17 @@ public class ServerMessageHandler implements MessageHandler {
     EventQueue.invokeLater(
         () -> {
           server.getCampaign().setName(msg.getName());
+        });
+  }
+
+  private void handle(SetCampaignLandingMapMsg msg) {
+    EventQueue.invokeLater(
+        () -> {
+          if (msg.hasLandingMapId()) {
+            server.getCampaign().setLandingMapId(GUID.valueOf(msg.getLandingMapId()));
+          } else {
+            server.getCampaign().setLandingMapId(null);
+          }
         });
   }
 
@@ -490,17 +507,6 @@ public class ServerMessageHandler implements MessageHandler {
               .getMainEventBus()
               .post(new TokensRemoved(zone, zone.getAllTokens()));
           new MapToolEventBus().getMainEventBus().post(new ZoneRemoved(zone));
-        });
-  }
-
-  private void handle(RemoveTopologyMsg msg) {
-    EventQueue.invokeLater(
-        () -> {
-          var zoneGUID = GUID.valueOf(msg.getZoneGuid());
-          var area = Mapper.map(msg.getArea());
-          var topologyType = Zone.TopologyType.valueOf(msg.getType().name());
-          Zone zone = server.getCampaign().getZone(zoneGUID);
-          zone.removeTopology(area, topologyType);
         });
   }
 
@@ -650,8 +656,7 @@ public class ServerMessageHandler implements MessageHandler {
           var zoneGUID = GUID.valueOf(clearAllDrawingsMsg.getZoneGuid());
           var layer = Zone.Layer.valueOf(clearAllDrawingsMsg.getLayer());
           Zone zone = server.getCampaign().getZone(zoneGUID);
-          List<DrawnElement> list = zone.getDrawnElements(layer);
-          zone.clearDrawables(list); // FJE Empties the DrawableUndoManager and empties the list
+          zone.clearDrawables(layer);
         });
   }
 
@@ -678,20 +683,21 @@ public class ServerMessageHandler implements MessageHandler {
         });
   }
 
-  private void handle(AddTopologyMsg addTopologyMsg) {
+  private void handle(UpdateMaskTopologyMsg updateTopologyMsg) {
     EventQueue.invokeLater(
         () -> {
-          var zoneGUID = GUID.valueOf(addTopologyMsg.getZoneGuid());
-          var area = Mapper.map(addTopologyMsg.getArea());
-          var topologyType = Zone.TopologyType.valueOf(addTopologyMsg.getType().name());
+          var zoneGUID = GUID.valueOf(updateTopologyMsg.getZoneGuid());
+          var area = Mapper.map(updateTopologyMsg.getArea());
+          var erase = updateTopologyMsg.getErase();
+          var topologyType = Zone.TopologyType.valueOf(updateTopologyMsg.getType().name());
           Zone zone = server.getCampaign().getZone(zoneGUID);
-          zone.addTopology(area, topologyType);
+          zone.updateMaskTopology(area, erase, topologyType);
         });
   }
 
   private void handle(BootPlayerMsg bootPlayerMsg) {
     // And just to be sure, remove them from the server
-    server.releaseClientConnection(server.getConnectionId(bootPlayerMsg.getPlayerName()));
+    server.bootPlayer(bootPlayerMsg.getPlayerName());
   }
 
   private void handle(String id, UpdatePlayerStatusMsg updatePlayerStatusMsg) {
@@ -704,12 +710,22 @@ public class ServerMessageHandler implements MessageHandler {
     server.updatePlayerStatus(playerName, zoneId, loaded);
   }
 
+  private void handle(SetWallTopologyMsg setWallTopologyMsg) {
+    EventQueue.invokeLater(
+        () -> {
+          var zoneId = new GUID(setWallTopologyMsg.getZoneGuid());
+          var zone = server.getCampaign().getZone(zoneId);
+          var topology = WallTopology.fromDto(setWallTopologyMsg.getTopology());
+          zone.replaceWalls(topology);
+        });
+  }
+
   private void sendToClients(String excludedId, Message message) {
-    server.getConnection().broadcastMessage(new String[] {excludedId}, message);
+    server.broadcastMessage(new String[] {excludedId}, message);
   }
 
   private void sendToAllClients(Message message) {
-    server.getConnection().broadcastMessage(message);
+    server.broadcastMessage(message);
   }
 
   private void bringTokensToFront(GUID zoneGUID, Set<GUID> tokenSet) {
@@ -751,12 +767,10 @@ public class ServerMessageHandler implements MessageHandler {
               AssetManager.getAssetInfo(assetID).getProperty(AssetManager.NAME),
               AssetManager.getAssetCacheFile(assetID));
       var msg = StartAssetTransferMsg.newBuilder().setHeader(producer.getHeader().toDto());
-      server
-          .getConnection()
-          .sendMessage(
-              id,
-              MapToolConstants.Channel.IMAGE,
-              Message.newBuilder().setStartAssetTransferMsg(msg).build());
+      server.sendMessage(
+          id,
+          MapToolConstants.Channel.IMAGE,
+          Message.newBuilder().setStartAssetTransferMsg(msg).build());
       server.addAssetProducer(id, producer);
 
     } catch (IllegalArgumentException iae) {
@@ -765,14 +779,14 @@ public class ServerMessageHandler implements MessageHandler {
       // image instead of blowing up
       Asset asset = Asset.createBrokenImageAsset(assetID);
       var msg = PutAssetMsg.newBuilder().setAsset(asset.toDto());
-      server.getConnection().sendMessage(id, Message.newBuilder().setPutAssetMsg(msg).build());
+      server.sendMessage(id, Message.newBuilder().setPutAssetMsg(msg).build());
     }
   }
 
   private void getZone(String id, GUID zoneGUID) {
     var zone = server.getCampaign().getZone(zoneGUID);
     var msg = PutZoneMsg.newBuilder().setZone(zone.toDto());
-    server.getConnection().sendMessage(id, Message.newBuilder().setPutZoneMsg(msg).build());
+    server.sendMessage(id, Message.newBuilder().setPutZoneMsg(msg).build());
   }
 
   private void putToken(String clientId, GUID zoneGUID, Token token) {
@@ -794,9 +808,7 @@ public class ServerMessageHandler implements MessageHandler {
               .setTokenGuid(token.getId().toString())
               .setProperty(TokenUpdateDto.valueOf(Token.Update.setZOrder.name()))
               .addValues(0, TokenPropertyValueDto.newBuilder().setIntValue(zOrder));
-      server
-          .getConnection()
-          .sendMessage(clientId, Message.newBuilder().setUpdateTokenPropertyMsg(msg).build());
+      server.sendMessage(clientId, Message.newBuilder().setUpdateTokenPropertyMsg(msg).build());
     }
   }
 

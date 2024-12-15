@@ -137,7 +137,7 @@ public class MessageUtil {
 
     sb.append("<table class='ava-msg'><tr valign='top'>");
 
-    if (AppPreferences.getShowAvatarInChat()) {
+    if (AppPreferences.showAvatarInChat.get()) {
       if (token == null && MapTool.getFrame().getCommandPanel().isImpersonating()) {
         GUID guid = MapTool.getFrame().getCommandPanel().getIdentityGUID();
         if (guid != null)
@@ -188,6 +188,11 @@ public class MessageUtil {
     if (color == null) {
       return "";
     }
+    return String.format("#%06X", color.getRGB() & 0x00FFFFFF);
+  }
+
+  public static String getDefaultBackgroundHex() {
+    var color = UIManager.getColor("Panel.background");
     return String.format("#%06X", color.getRGB() & 0x00FFFFFF);
   }
 

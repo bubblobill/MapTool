@@ -124,6 +124,8 @@ public class AppMenuBar extends JMenuBar {
     menu.add(new JMenuItem(AppActions.IMPORT_DUNGEON_DRAFT_MAP));
     menu.addSeparator();
 
+    menu.add(new RPCheckBoxMenuItem(AppActions.TOGGLE_LANDING_MAP, menu));
+
     // MAP TOGGLES
     // Lee: modifying due to the waypoint exposure toggle's dependency to this.
     menu.add(new RPCheckBoxMenuItem(AppActions.TOGGLE_CURRENT_ZONE_VISIBILITY, menu));
@@ -379,18 +381,21 @@ public class AppMenuBar extends JMenuBar {
       for (String key : helpArray) {
         OpenUrlAction temp = new AppActions.OpenUrlAction(key);
         switch (key) {
-          case "action.helpurl.01" -> temp.putValue(
-              Action.SMALL_ICON, RessourceManager.getSmallIcon(Icons.MENU_DOCUMENTATION));
-          case "action.helpurl.02" -> temp.putValue(
-              Action.SMALL_ICON, RessourceManager.getSmallIcon(Icons.MENU_TUTORIALS));
-          case "action.helpurl.03" -> temp.putValue(
-              Action.SMALL_ICON, RessourceManager.getSmallIcon(Icons.MENU_FORUMS));
-          case "action.helpurl.04" -> temp.putValue(
-              Action.SMALL_ICON, RessourceManager.getSmallIcon(Icons.MENU_NETWORK_SETUP));
-          case "action.helpurl.05" -> temp.putValue(
-              Action.SMALL_ICON, RessourceManager.getSmallIcon(Icons.MENU_SCRIPTING));
-          case "action.helpurl.06" -> temp.putValue(
-              Action.SMALL_ICON, RessourceManager.getSmallIcon(Icons.MENU_FRAMEWORKS));
+          case "action.helpurl.01" ->
+              temp.putValue(
+                  Action.SMALL_ICON, RessourceManager.getSmallIcon(Icons.MENU_DOCUMENTATION));
+          case "action.helpurl.02" ->
+              temp.putValue(Action.SMALL_ICON, RessourceManager.getSmallIcon(Icons.MENU_TUTORIALS));
+          case "action.helpurl.03" ->
+              temp.putValue(Action.SMALL_ICON, RessourceManager.getSmallIcon(Icons.MENU_FORUMS));
+          case "action.helpurl.04" ->
+              temp.putValue(
+                  Action.SMALL_ICON, RessourceManager.getSmallIcon(Icons.MENU_NETWORK_SETUP));
+          case "action.helpurl.05" ->
+              temp.putValue(Action.SMALL_ICON, RessourceManager.getSmallIcon(Icons.MENU_SCRIPTING));
+          case "action.helpurl.06" ->
+              temp.putValue(
+                  Action.SMALL_ICON, RessourceManager.getSmallIcon(Icons.MENU_FRAMEWORKS));
         }
         menu.add(new JMenuItem(temp));
       }
@@ -432,7 +437,11 @@ public class AppMenuBar extends JMenuBar {
     JCheckBoxMenuItem menuItem =
         new RPCheckBoxMenuItem(new AppActions.ToggleOverlayAction(overlayManager), overlayMenu);
     menuItem.setText(overlayManager.getName());
-    overlayMenu.add(menuItem);
+    if (overlayManager.getLocked()) {
+      overlayMenu.add(menuItem).setEnabled(false);
+    } else {
+      overlayMenu.add(menuItem);
+    }
     overlayMenu.setEnabled(true);
     overlayItems.put(overlayManager.getName(), menuItem);
   }

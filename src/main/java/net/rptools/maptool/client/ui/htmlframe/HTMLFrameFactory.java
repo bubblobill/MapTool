@@ -59,6 +59,7 @@ public class HTMLFrameFactory {
     int width = -1;
     int height = -1;
     int zOrder = 0;
+    boolean locked = false;
     String title = name;
     String tabTitle = null;
     Object frameValue = null;
@@ -114,6 +115,15 @@ public class HTMLFrameFactory {
             String msg = I18N.getText("macro.function.general.argumentKeyTypeI", funcName, keyLC);
             throw new ParserException(msg);
           }
+        } else if (keyLC.equals("locked")) {
+          try {
+            int v = Integer.parseInt(value);
+            if (v != 0) {
+              locked = true;
+            }
+          } catch (NumberFormatException e) {
+            // Ignoring the value; shouldn't we warn the user?
+          }
         } else if (keyLC.equals("title")) {
           title = value;
         } else if (keyLC.equals("noframe")) {
@@ -165,7 +175,7 @@ public class HTMLFrameFactory {
           frameValue,
           html);
     } else if (frameType == FrameType.OVERLAY) {
-      MapTool.getFrame().getOverlayPanel().showOverlay(name, zOrder, html, frameValue);
+      MapTool.getFrame().getOverlayPanel().showOverlay(name, zOrder, locked, html, frameValue);
     }
   }
 

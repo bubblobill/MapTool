@@ -16,10 +16,16 @@ package net.rptools.maptool.model.drawing;
 
 import com.google.protobuf.StringValue;
 import java.awt.Graphics2D;
+import java.awt.Polygon;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Shape;
 import java.awt.geom.Area;
+import java.awt.geom.Ellipse2D;
+import java.awt.geom.RectangularShape;
+import javax.annotation.Nonnull;
 import net.rptools.maptool.model.GUID;
+import net.rptools.maptool.model.Zone;
 import net.rptools.maptool.server.Mapper;
 import net.rptools.maptool.server.proto.drawing.DrawableDto;
 import net.rptools.maptool.server.proto.drawing.ShapeDrawableDto;
@@ -40,24 +46,58 @@ public class ShapeDrawable extends AbstractDrawing {
     this.useAntiAliasing = useAntiAliasing;
   }
 
-  public ShapeDrawable(Shape shape) {
-    this(shape, true);
+  public ShapeDrawable(ShapeDrawable other) {
+    super(other);
+    this.useAntiAliasing = other.useAntiAliasing;
+    this.shape =
+        switch (other.shape) {
+          // Covers Rectangle, Ellipse2D, etc.
+          case RectangularShape r -> (Shape) r.clone();
+          case Polygon p -> new Polygon(p.xpoints, p.ypoints, p.npoints);
+          case Area a -> new Area(a);
+          default -> other.shape; // Assume anything else cannot be copied but is also okay.
+        };
+  }
+
+  @Override
+  public Drawable copy() {
+    return new ShapeDrawable(this);
+  }
+
+  /**
+   * Get a descriptive name for the type of shape wrapped by this {@code ShapeDrawable}.
+   *
+   * <p>Note: do not use this method for type checks. It is only useful for producing human-readable
+   * text, including by building translation keys. If you need type checking, using {@link
+   * #getShape()} along with `instanceof`!
+   *
+   * @return The type of shape contained in this drawable.
+   */
+  public String getShapeTypeName() {
+    return switch (shape) {
+      case Rectangle ignored -> "Rectangle";
+      case Ellipse2D ignored -> "Oval";
+      case Polygon ignored -> "Polygon";
+      case Area ignored -> "Area";
+      default -> "Unknown";
+    };
   }
 
   public boolean getUseAntiAliasing() {
     return useAntiAliasing;
   }
 
-  /*
-   * (non-Javadoc)
-   *
-   * @see net.rptools.maptool.model.drawing.Drawable#getBounds()
-   */
   public java.awt.Rectangle getBounds() {
     return shape.getBounds();
   }
 
-  public Area getArea() {
+  @Override
+  public java.awt.Rectangle getBounds(Zone zone) {
+    return getBounds();
+  }
+
+  @Override
+  public @Nonnull Area getArea(Zone zone) {
     return new Area(shape);
   }
 
@@ -76,15 +116,26 @@ public class ShapeDrawable extends AbstractDrawing {
     return DrawableDto.newBuilder().setShapeDrawable(dto).build();
   }
 
+  public static ShapeDrawable fromDto(ShapeDrawableDto dto) {
+    var shape = Mapper.map(dto.getShape());
+    var id = GUID.valueOf(dto.getId());
+    var drawable = new ShapeDrawable(id, shape, dto.getUseAntiAliasing());
+    if (dto.hasName()) {
+      drawable.setName(dto.getName().getValue());
+    }
+    drawable.setLayer(Zone.Layer.valueOf(dto.getLayer()));
+    return drawable;
+  }
+
   @Override
-  protected void draw(Graphics2D g) {
+  protected void draw(Zone zone, Graphics2D g) {
     Object oldAA = applyAA(g);
     g.draw(shape);
     restoreAA(g, oldAA);
   }
 
   @Override
-  protected void drawBackground(Graphics2D g) {
+  protected void drawBackground(Zone zone, Graphics2D g) {
     Object oldAA = applyAA(g);
     g.fill(shape);
     restoreAA(g, oldAA);

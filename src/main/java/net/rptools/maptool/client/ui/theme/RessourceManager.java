@@ -20,7 +20,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
-import java.util.Set;
+import java.util.TreeSet;
 import javax.swing.*;
 import net.rptools.lib.image.ImageUtil;
 import net.rptools.maptool.client.AppPreferences;
@@ -36,6 +36,9 @@ public class RessourceManager {
           // This icons don't exist in classic.
           put(Icons.ACTION_EXPORT, null);
           put(Icons.ACTION_IMPORT, null);
+          put(Icons.ACTION_TARGET_ADD, null);
+          put(Icons.ACTION_TARGET_EDIT, null);
+          put(Icons.ACTION_TARGET_REMOVE, null);
           put(Icons.PROPERTIES_TABLE_ALPHABETIC, null);
           put(Icons.PROPERTIES_TABLE_CATEGORIES, null);
           put(Icons.PROPERTIES_TABLE_COLLAPSE, null);
@@ -183,6 +186,7 @@ public class RessourceManager {
           put(Icons.TOOLBAR_TOKENSELECTION_NPC_ON, IMAGE_DIR + "tool/select-npc-blue.png");
           put(Icons.TOOLBAR_TOKENSELECTION_PC_OFF, IMAGE_DIR + "tool/select-pc-blue-off.png");
           put(Icons.TOOLBAR_TOKENSELECTION_PC_ON, IMAGE_DIR + "tool/select-pc-blue.png");
+          put(Icons.TOOLBAR_TOPOLOGY_WALL, IMAGE_DIR + "tool/wall-topology.png");
           put(Icons.TOOLBAR_TOPOLOGY_BOX, IMAGE_DIR + "tool/top-blue-rect.png");
           put(Icons.TOOLBAR_TOPOLOGY_BOX_HOLLOW, IMAGE_DIR + "tool/top-blue-hrect.png");
           put(Icons.TOOLBAR_TOPOLOGY_CROSS, IMAGE_DIR + "tool/top-blue-cross.png");
@@ -241,7 +245,6 @@ public class RessourceManager {
           put(Images.GRID_BORDER_HEX, IMAGE_DIR + "hexBorder.png");
           put(Images.GRID_BORDER_ISOMETRIC, IMAGE_DIR + "isoBorder.png");
           put(Images.GRID_BORDER_SQUARE, IMAGE_DIR + "whiteBorder.png");
-          put(Images.GRID_BORDER_SQUARE_RED, IMAGE_DIR + "grid-square-red.png");
           put(Images.HEROLABS_PORTRAIT, IMAGE_DIR + "powered_by_hero_lab_small.png");
           put(Images.HEROLABS_TOKEN, IMAGE_DIR + "hero-lab-token.png");
           put(Images.LIGHT_SOURCE, IMAGE_DIR + "lightbulb.png");
@@ -300,10 +303,35 @@ public class RessourceManager {
           put(Icons.ACTION_SELECT_ALL_TOKENS, ROD_ICONS + "misc/Select All Tokens.svg");
           put(Icons.ACTION_SELECT_NO_TOKENS, ROD_ICONS + "misc/Deselect All Tokens.svg");
           put(Icons.ACTION_SETTINGS, ROD_ICONS + "initiative/Initiative Settings.svg");
+          put(Icons.ACTION_TARGET_ADD, ROD_ICONS + "add target.svg");
+          put(Icons.ACTION_TARGET_EDIT, ROD_ICONS + "edit target.svg");
+          put(Icons.ACTION_TARGET_REMOVE, ROD_ICONS + "remove target.svg");
+          put(Icons.ADD_RESSOURCE_LOCAL, ROD_ICONS + "folder.svg");
+          put(Icons.ASSETPANEL_HEROLABS, ROD_ICONS + "hero-lab-icon.svg");
+          put(Icons.ASSETPANEL_HEROLABS_FOLDER, ROD_ICONS + "hero_lab_folder.svg");
           put(Icons.CHAT_HIDE_TYPING_NOTIFICATION, ROD_ICONS + "misc/Hide Typing notification.svg");
           put(Icons.CHAT_SCROLL_LOCK_ON, ROD_ICONS + "misc/Scroll Lock.svg");
           put(Icons.CHAT_SHOW_TYPING_NOTIFICATION, ROD_ICONS + "misc/Show Typing notification.svg");
+          put(Icons.COLORPICKER_CAP_ROUND, ROD_ICONS + "round_cap.svg");
+          put(Icons.COLORPICKER_CAP_SQUARE, ROD_ICONS + "square_cap.svg");
+          put(Icons.COLORPICKER_ERASER, ROD_ICONS + "eraser.svg");
+          put(Icons.COLORPICKER_OPACITY, ROD_ICONS + "contrast_high.svg");
+          put(Icons.COLORPICKER_PENCIL, ROD_ICONS + "pencil.svg");
+          put(Icons.COLORPICKER_PEN_WIDTH, ROD_ICONS + "paintbrush.svg");
+          put(Icons.COLORPICKER_SNAP_OFF, ROD_ICONS + "freehand.svg");
+          put(Icons.COLORPICKER_SNAP_ON, ROD_ICONS + "shape_handles.svg");
           put(Icons.EDIT_TOKEN_COLOR_PICKER, ROD_ICONS + "misc/Colour Selection (eye dropper).svg");
+          put(Icons.EDIT_TOKEN_HEROLAB, ROD_ICONS + "hero-lab-icon.svg");
+          // FIXME: both icons are the same. Maybe we could change the color of svgs according to
+          // the theme?
+          put(Icons.EDIT_TOKEN_REFRESH_OFF, ROD_ICONS + "refresh_arrows.svg");
+          put(Icons.EDIT_TOKEN_REFRESH_ON, ROD_ICONS + "refresh_arrows.svg");
+          put(Icons.GRID_HEX_HORIZONTAL, ROD_ICONS + "gridHorizontalHex.svg");
+          put(Icons.GRID_HEX_VERTICAL, ROD_ICONS + "gridVerticalHex.svg");
+          put(Icons.GRID_ISOMETRIC, ROD_ICONS + "gridIsometric.svg");
+          put(Icons.GRID_NONE, ROD_ICONS + "cross.svg");
+          put(Icons.GRID_SQUARE, ROD_ICONS + "gridSquare.svg");
+          put(Icons.MAPTOOL, ROD_ICONS + "maptool_icon.svg");
           put(Icons.MENU_DOCUMENTATION, ROD_ICONS + "menu/Documentation.svg");
           put(Icons.MENU_FORUMS, ROD_ICONS + "menu/Forums.svg");
           put(Icons.MENU_FRAMEWORKS, ROD_ICONS + "menu/Frameworks.svg");
@@ -349,6 +377,8 @@ public class RessourceManager {
           put(Icons.TOOLBAR_FOG_EXPOSE_POLYGON, ROD_ICONS + "ribbon/Draw Polygon.svg");
           put(Icons.TOOLBAR_FOG_OFF, ROD_ICONS + "ribbon/Fog of War Tools.svg");
           put(Icons.TOOLBAR_FOG_ON, ROD_ICONS + "ribbon/Fog of War Tools.svg");
+          put(Icons.TOOLBAR_HIDE_OFF, ROD_ICONS + "upArrow.svg");
+          put(Icons.TOOLBAR_HIDE_ON, ROD_ICONS + "downArrow.svg");
           put(
               Icons.TOOLBAR_POINTERTOOL_AI_OFF,
               ROD_ICONS + "ribbon/Pathing MBL - VBL (AI) - OFF.svg");
@@ -383,6 +413,7 @@ public class RessourceManager {
           put(Icons.TOOLBAR_TOKENSELECTION_NPC_ON, ROD_ICONS + "ribbon/NPC.svg");
           put(Icons.TOOLBAR_TOKENSELECTION_PC_OFF, ROD_ICONS + "ribbon/PC.svg");
           put(Icons.TOOLBAR_TOKENSELECTION_PC_ON, ROD_ICONS + "ribbon/PC.svg");
+          put(Icons.TOOLBAR_TOPOLOGY_WALL, ROD_ICONS + "ribbon/Wall Topology.svg");
           put(Icons.TOOLBAR_TOPOLOGY_BOX, ROD_ICONS + "ribbon/Draw Rectangle.svg");
           put(Icons.TOOLBAR_TOPOLOGY_BOX_HOLLOW, ROD_ICONS + "ribbon/Draw Hollow Rectangle.svg");
           put(Icons.TOOLBAR_TOPOLOGY_CROSS, ROD_ICONS + "ribbon/Draw Cross.svg");
@@ -402,9 +433,12 @@ public class RessourceManager {
           put(Icons.TOOLBAR_TOPOLOGY_TYPE_PIT_ON, ROD_ICONS + "ribbon/Draw Pit VBL.svg");
           put(Icons.TOOLBAR_TOPOLOGY_TYPE_VBL_OFF, ROD_ICONS + "ribbon/Draw Wall VBL.svg");
           put(Icons.TOOLBAR_TOPOLOGY_TYPE_VBL_ON, ROD_ICONS + "ribbon/Draw Wall VBL.svg");
+          put(Icons.TOOLBAR_TOPOLOGY_TYPE_COVER_OFF, ROD_ICONS + "ribbon/Draw Cover VBL.svg");
+          put(Icons.TOOLBAR_TOPOLOGY_TYPE_COVER_ON, ROD_ICONS + "ribbon/Draw Cover VBL.svg");
           put(Icons.TOOLBAR_VOLUME_OFF, ROD_ICONS + "ribbon/Mute - OFF.svg");
           put(Icons.TOOLBAR_VOLUME_ON, ROD_ICONS + "ribbon/Mute - ON.svg");
           put(Icons.TOOLBAR_ZONE, ROD_ICONS + "ribbon/Select Map.svg");
+          put(Icons.TOOLBAR_ZONE_NOT_VISIBLE, ROD_ICONS + "notvisible.svg");
           put(Icons.WINDOW_CAMPAIGN_MACROS, ROD_ICONS + "windows/Campaign Macros.svg");
           put(Icons.WINDOW_CHAT, ROD_ICONS + "windows/Chat.svg");
           put(Icons.WINDOW_CONNECTIONS, ROD_ICONS + "windows/Connections.svg");
@@ -469,7 +503,7 @@ public class RessourceManager {
 
   private static ImageIcon getIcon(Icons icon, int width, int height) {
     var iconPaths = classicIcons;
-    switch (AppPreferences.getIconTheme()) {
+    switch (AppPreferences.iconTheme.get()) {
       case ROD_TAKEHARA -> iconPaths = rodIcons;
     }
 
@@ -531,18 +565,24 @@ public class RessourceManager {
   }
 
   public static void main(String[] args) {
-    checkMissingFiles();
+    // checkMissingFiles();
     checkMissingIcons(classicIcons, rodIcons);
-    for (var img : Set.of(images.values())) System.out.println(img);
+    // for (var img : Set.of(images.values())) System.out.println(img);
   }
 
   private static void checkMissingIcons(
       HashMap<Icons, String> classicIcons, HashMap<Icons, String> rodIcons) {
+    var missing = new TreeSet<Icons>();
     for (var key : classicIcons.keySet()) {
-      if (rodIcons.containsKey(key)) continue;
+      if (rodIcons.containsKey(key)) {
+        continue;
+      }
+      missing.add(key);
+    }
 
-      System.out.println(
-          key + " missing from iconset. File for classic icon is :" + classicIcons.get(key));
+    System.out.println("Missing icons:");
+    for (var key : missing) {
+      System.out.println(key + " classic: " + classicIcons.get(key));
     }
   }
 

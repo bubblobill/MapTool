@@ -33,7 +33,7 @@ import net.rptools.maptool.client.AppActions;
 import net.rptools.maptool.client.events.PlayerConnected;
 import net.rptools.maptool.client.events.PlayerDisconnected;
 import net.rptools.maptool.client.events.PlayerStatusChanged;
-import net.rptools.maptool.client.events.ServerStopped;
+import net.rptools.maptool.client.events.ServerDisconnected;
 import net.rptools.maptool.client.swing.PopupListener;
 import net.rptools.maptool.events.MapToolEventBus;
 import net.rptools.maptool.language.I18N;
@@ -111,6 +111,10 @@ public class ClientConnectionPanel extends JPanel {
 
   @Subscribe
   private void onPlayerConnected(PlayerConnected event) {
+    if (event.isLocal()) {
+      return;
+    }
+
     listModel.addElement(event.player());
   }
 
@@ -128,7 +132,7 @@ public class ClientConnectionPanel extends JPanel {
   }
 
   @Subscribe
-  private void onServerStopped(ServerStopped event) {
+  private void onServerDisconnected(ServerDisconnected event) {
     listModel.clear();
   }
 

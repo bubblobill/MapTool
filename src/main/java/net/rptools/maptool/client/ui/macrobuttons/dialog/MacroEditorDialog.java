@@ -471,7 +471,7 @@ public class MacroEditorDialog extends JDialog implements SearchListener {
 
     // Macro Editor setup
     macroEditorRSyntaxTextArea.setSyntaxEditingStyle("text/MapToolScript");
-
+    macroEditorRSyntaxTextArea.setInsertPairedCharacters(false);
     macroEditorRSyntaxTextArea.setEditable(true);
     macroEditorRSyntaxTextArea.setCodeFoldingEnabled(true);
     macroEditorRSyntaxTextArea.setLineWrap(true);
@@ -493,7 +493,7 @@ public class MacroEditorDialog extends JDialog implements SearchListener {
     // Set the color style via Theme
     try {
       File themeFile =
-          new File(AppConstants.THEMES_DIR, AppPreferences.getDefaultMacroEditorTheme() + ".xml");
+          new File(AppConstants.THEMES_DIR, AppPreferences.defaultMacroEditorTheme.get() + ".xml");
       Theme theme = Theme.load(new FileInputStream(themeFile));
       theme.apply(macroEditorRSyntaxTextArea);
       theme.apply(getToolTipTextField());

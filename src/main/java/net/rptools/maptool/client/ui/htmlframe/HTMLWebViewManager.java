@@ -17,21 +17,31 @@ package net.rptools.maptool.client.ui.htmlframe;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.sun.webkit.WebPage;
 import com.sun.webkit.dom.HTMLSelectElementImpl;
 import java.awt.*;
 import java.awt.event.ActionListener;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedList;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Matcher;
 import javafx.beans.value.ObservableValue;
 import javafx.concurrent.Worker;
+import javafx.event.EventType;
 import javafx.scene.Scene;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.TextInputDialog;
+import javafx.scene.input.DataFormat;
+import javafx.scene.input.DragEvent;
+import javafx.scene.input.Dragboard;
+import javafx.scene.input.MouseEvent;
+import javafx.scene.input.TransferMode;
 import javafx.scene.web.*;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
@@ -49,6 +59,7 @@ import netscape.javascript.JSObject;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.w3c.dom.*;
+import org.w3c.dom.events.EventListener;
 import org.w3c.dom.events.EventTarget;
 import org.w3c.dom.html.*;
 
@@ -80,6 +91,10 @@ public class HTMLWebViewManager {
 
   /** The bridge from Javascript to Java. */
   private final JavaBridge bridge;
+
+  private EventListener listenerA = this::fixHref;
+
+  private EventListener listenerSubmit = this::getDataAndSubmit;
 
   /** Represents a bridge from Javascript to Java. */
   public class JavaBridge {
@@ -149,12 +164,49 @@ public class HTMLWebViewManager {
         if (addedNode instanceof EventTarget) {
           EventTarget target = (EventTarget) addedNode;
           if (addedNode instanceof HTMLAnchorElement || addedNode instanceof HTMLAreaElement) {
-            target.addEventListener("click", HTMLWebViewManager.this::fixHref, true);
+            target.addEventListener("click", listenerA, true);
           } else if (target instanceof HTMLFormElement) {
-            target.addEventListener("submit", HTMLWebViewManager.this::getDataAndSubmit, true);
+            target.addEventListener("submit", listenerSubmit, true);
           } else if (target instanceof HTMLInputElement || target instanceof HTMLButtonElement) {
-            target.addEventListener("click", HTMLWebViewManager.this::getDataAndSubmit, true);
+            target.addEventListener("click", listenerSubmit, true);
           }
+        }
+
+        // Add listeners to the node's descendant as they don't trigger mutation observer.
+        NodeList nodeList;
+
+        // Add event handlers for <a> hyperlinks.
+        nodeList = addedNode.getElementsByTagName("a");
+        for (int i = 0; i < nodeList.getLength(); i++) {
+          EventTarget node = (EventTarget) nodeList.item(i);
+          node.addEventListener("click", listenerA, true);
+        }
+
+        // Add event handlers for hyperlinks for maps.
+        nodeList = addedNode.getElementsByTagName("area");
+        for (int i = 0; i < nodeList.getLength(); i++) {
+          EventTarget node = (EventTarget) nodeList.item(i);
+          node.addEventListener("click", listenerA, true);
+        }
+
+        // Set the "submit" handler to get the data on submission not based on buttons
+        nodeList = addedNode.getElementsByTagName("form");
+        for (int i = 0; i < nodeList.getLength(); i++) {
+          EventTarget target = (EventTarget) nodeList.item(i);
+          target.addEventListener("submit", listenerSubmit, true);
+        }
+
+        // Set the "submit" handler to get the data on submission based on input
+        nodeList = addedNode.getElementsByTagName("input");
+        for (int i = 0; i < nodeList.getLength(); i++) {
+          EventTarget target = (EventTarget) nodeList.item(i);
+          target.addEventListener("click", listenerSubmit, true);
+        }
+        // Set the "submit" handler to get the data on submission based on button
+        nodeList = addedNode.getElementsByTagName("button");
+        for (int i = 0; i < nodeList.getLength(); i++) {
+          EventTarget target = (EventTarget) nodeList.item(i);
+          target.addEventListener("click", listenerSubmit, true);
         }
       }
     }
@@ -231,6 +283,8 @@ public class HTMLWebViewManager {
     webEngine.setCreatePopupHandler(HTMLWebViewManager::showPopup);
     webEngine.setOnError(HTMLWebViewManager::showError);
 
+    addWorkaroundFor3679(this.webView);
+
     // Workaround to load Java Bridge before everything else.
     webEngine.onStatusChangedProperty().set(this::setBridge);
   }
@@ -256,6 +310,10 @@ public class HTMLWebViewManager {
     webEngine.load("about:blank");
     // Delete cookies
     java.net.CookieHandler.setDefault(new java.net.CookieManager());
+
+    // This may look pointless, but we need new objects on JFX <22 to avoid peering issues.
+    listenerA = this::fixHref;
+    listenerSubmit = this::getDataAndSubmit;
 
     isFlushed = true;
   }
@@ -363,7 +421,7 @@ public class HTMLWebViewManager {
   }
 
   String getCSSRule() {
-    return String.format(CSS_BODY, AppPreferences.getFontSize()) + CSS_SPAN + CSS_DIV;
+    return String.format(CSS_BODY, AppPreferences.fontSize.get()) + CSS_SPAN + CSS_DIV;
   }
 
   /**
@@ -527,8 +585,8 @@ public class HTMLWebViewManager {
           // Java bug JDK-8199014 workaround
           webEngine.executeScript(String.format(SCRIPT_ANCHOR, href.substring(1)));
         } else if (!href2.startsWith("javascript")) {
-          // non-macrolink, non-anchor link, non-javascript code
-          MapTool.showDocument(href); // show in usual browser
+          // non-macrolink, non-anchor link, non-javascript code. Show in usual browser
+          SwingUtilities.invokeLater(() -> MapTool.showDocument(href));
         }
         event.preventDefault(); // don't change webview
       }
@@ -767,4 +825,141 @@ public class HTMLWebViewManager {
   private void scrollTo(int x, int y) {
     webEngine.executeScript("window.scrollTo(" + x + ", " + y + ")");
   }
+
+  // region Drag-and-drop workaround for [#3679](https://github.com/RPTools/maptool/issues/3679)
+  // This is exactly what WebView itself does, except that we do not cache the mimes and values.
+  // Doing so leads to more questions than answers and lacking invalidation causes the bug.
+
+  private static void addWorkaroundFor3679(WebView webView) {
+    final var webEngine = webView.getEngine();
+    final WebPage page;
+    try {
+      MethodHandles.Lookup lookup = MethodHandles.lookup();
+      lookup = MethodHandles.privateLookupIn(WebEngine.class, lookup);
+      MethodHandle getPageHandle = lookup.findGetter(WebEngine.class, "page", WebPage.class);
+
+      page = (WebPage) getPageHandle.invokeExact(webEngine);
+    } catch (Throwable throwable) {
+      log.error("Unable to access WebPage from WebEngine", throwable);
+      return;
+    }
+
+    webView.setOnDragEntered(event -> dragHandler(page, event));
+    webView.setOnDragExited(event -> dragHandler(page, event));
+    webView.setOnDragOver(event -> dragHandler(page, event));
+    webView.setOnDragDropped(event -> dragHandler(page, event));
+    webView.setOnDragDetected(event -> onDragDetected(page, event));
+    webView.setOnDragDone(event -> onDragDone(page, event));
+  }
+
+  private static int getWKDndEventType(EventType<DragEvent> et) {
+    int commandId = 0;
+    if (et == DragEvent.DRAG_ENTERED) {
+      commandId = WebPage.DND_DST_ENTER;
+    } else if (et == DragEvent.DRAG_EXITED) {
+      commandId = WebPage.DND_DST_EXIT;
+    } else if (et == DragEvent.DRAG_OVER) {
+      commandId = WebPage.DND_DST_OVER;
+    } else if (et == DragEvent.DRAG_DROPPED) {
+      commandId = WebPage.DND_DST_DROP;
+    }
+    return commandId;
+  }
+
+  private static final int WK_DND_ACTION_NONE = 0x0;
+  private static final int WK_DND_ACTION_COPY = 0x1;
+  private static final int WK_DND_ACTION_MOVE = 0x2;
+  private static final int WK_DND_ACTION_LINK = 0x40000000;
+
+  private static int getWKDndAction(TransferMode... tms) {
+    int dndActionId = WK_DND_ACTION_NONE;
+    for (TransferMode tm : tms) {
+      if (tm == TransferMode.COPY) {
+        dndActionId |= WK_DND_ACTION_COPY;
+      } else if (tm == TransferMode.MOVE) {
+        dndActionId |= WK_DND_ACTION_MOVE;
+      } else if (tm == TransferMode.LINK) {
+        dndActionId |= WK_DND_ACTION_LINK;
+      }
+    }
+    return dndActionId;
+  }
+
+  private static TransferMode[] getFXDndAction(int wkDndAction) {
+    LinkedList<TransferMode> tms = new LinkedList<>();
+    if ((wkDndAction & WK_DND_ACTION_COPY) != 0) {
+      tms.add(TransferMode.COPY);
+    }
+    if ((wkDndAction & WK_DND_ACTION_MOVE) != 0) {
+      tms.add(TransferMode.MOVE);
+    }
+    if ((wkDndAction & WK_DND_ACTION_LINK) != 0) {
+      tms.add(TransferMode.LINK);
+    }
+    return tms.toArray(new TransferMode[0]);
+  }
+
+  // Drag target
+
+  private static void dragHandler(WebPage page, DragEvent event) {
+    try {
+      Dragboard db = event.getDragboard();
+      LinkedList<String> mimes = new LinkedList<>();
+      LinkedList<String> values = new LinkedList<>();
+      for (DataFormat df : db.getContentTypes()) {
+        Object content = db.getContent(df);
+        if (content != null) {
+          for (String mime : df.getIdentifiers()) {
+            mimes.add(mime);
+            values.add(content.toString());
+          }
+        }
+      }
+
+      if (!mimes.isEmpty()) {
+        int wkDndEventType = getWKDndEventType(event.getEventType());
+        int wkDndAction =
+            page.dispatchDragOperation(
+                wkDndEventType,
+                mimes.toArray(new String[0]),
+                values.toArray(new String[0]),
+                (int) event.getX(),
+                (int) event.getY(),
+                (int) event.getScreenX(),
+                (int) event.getScreenY(),
+                getWKDndAction(db.getTransferModes().toArray(new TransferMode[0])));
+
+        if (!(wkDndEventType == WebPage.DND_DST_DROP && wkDndAction == WK_DND_ACTION_NONE)) {
+          event.acceptTransferModes(getFXDndAction(wkDndAction));
+        }
+        event.consume();
+      }
+    } catch (SecurityException ex) {
+      log.error("Security exception", ex);
+    }
+  }
+
+  // Drag source
+
+  private static void onDragDetected(WebPage page, MouseEvent event) {
+    if (page.isDragConfirmed()) {
+      page.confirmStartDrag();
+      event.consume();
+    }
+  }
+
+  private static void onDragDone(WebPage page, DragEvent event) {
+    page.dispatchDragOperation(
+        WebPage.DND_SRC_DROP,
+        null,
+        null,
+        (int) event.getX(),
+        (int) event.getY(),
+        (int) event.getScreenX(),
+        (int) event.getScreenY(),
+        getWKDndAction(event.getAcceptedTransferMode()));
+    event.consume();
+  }
+
+  // endregion
 }

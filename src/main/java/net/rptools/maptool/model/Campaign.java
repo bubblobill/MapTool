@@ -19,6 +19,7 @@ import java.util.*;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import net.rptools.lib.MD5Key;
 import net.rptools.lib.net.Location;
 import net.rptools.maptool.client.MapTool;
@@ -90,14 +91,6 @@ public class Campaign {
   // private Map<GUID, LightSource> lightSourceMap;
 
   /**
-   * Record to hold the arguments for rename token type functionality.
-   *
-   * @param from the name to rename from.
-   * @param to the name to rename to.
-   */
-  public record RenamePropertyType(@Nonnull String from, @Nonnull String to) {}
-
-  /**
    * This flag indicates whether the manual fog tools have been used in this campaign while a server
    * is not running. See {@link ToolbarPanel} for details.
    *
@@ -111,12 +104,24 @@ public class Campaign {
    */
   private Boolean hasUsedFogToolbar = null;
 
+  /** When a player connects to a server, this will be the map they are sent to at first. */
+  private @Nullable GUID landingMapId = null;
+
   public Campaign() {
     name = "Default";
     macroButtonLastIndex = 0;
     gmMacroButtonLastIndex = 0;
     macroButtonProperties = new ArrayList<MacroButtonProperties>();
     gmMacroButtonProperties = new ArrayList<MacroButtonProperties>();
+  }
+
+  public void setLandingMapId(@Nullable GUID zoneId) {
+    // Doesn't really matter if it belongs to {@link #zones}, that can be checked at lookup time.
+    this.landingMapId = zoneId;
+  }
+
+  public @Nullable GUID getLandingMapId() {
+    return this.landingMapId;
   }
 
   private Object readResolve() {
@@ -162,6 +167,7 @@ public class Campaign {
   public Campaign(Campaign campaign) {
     id = campaign.getId();
     name = campaign.getName();
+    landingMapId = campaign.landingMapId;
 
     /*
      * Don't forget that since these are new zones AND new tokens created here from the old one,
@@ -387,9 +393,9 @@ public class Campaign {
    * Return the <code>Zone</code> with the given GUID.
    *
    * @param id the id to look for
-   * @return the Zone for the id
+   * @return the Zone for the id, or {@code null} if there is no such zone.
    */
-  public Zone getZone(GUID id) {
+  public @Nullable Zone getZone(GUID id) {
     return zones.get(id);
   }
 
@@ -739,6 +745,7 @@ public class Campaign {
     var campaign = new Campaign();
     campaign.id = GUID.valueOf(dto.getId());
     campaign.name = dto.getName();
+    campaign.landingMapId = dto.hasLandingMapId() ? GUID.valueOf(dto.getLandingMapId()) : null;
     campaign.hasUsedFogToolbar =
         dto.hasHasUsedFogToolbar() ? dto.getHasUsedFogToolbar().getValue() : null;
     campaign.campaignProperties = CampaignProperties.fromDto(dto.getProperties());
@@ -764,6 +771,9 @@ public class Campaign {
     var dto = CampaignDto.newBuilder();
     dto.setId(id.toString());
     dto.setName(name);
+    if (landingMapId != null) {
+      dto.setLandingMapId(landingMapId.toString());
+    }
     if (hasUsedFogToolbar != null) {
       dto.setHasUsedFogToolbar(BoolValue.of(hasUsedFogToolbar));
     }
@@ -787,42 +797,6 @@ public class Campaign {
               .collect(Collectors.toList()));
     }
     return dto.build();
-  }
-
-  /**
-   * Perform a series of rename operations on the token types.
-   *
-   * @param rename List of rename operations to perform in order.
-   */
-  public void renameTokenTypes(@Nonnull List<RenamePropertyType> rename) {
-    var working = new ArrayList<>(rename);
-    rename.forEach(
-        r -> {
-          compressRenames(r, working);
-        });
-    rename.forEach(
-        r -> {
-          renameTokenTypes(r.from, r.to);
-        });
-  }
-
-  /**
-   * This method ensures that only a single rename occurs, e.g. if we have the renames A -> B B -> C
-   *
-   * <p>We transform this into A -> C B -> C
-   *
-   * @param rename the renaming operation to apply.
-   * @param working the queued renaming operations.
-   */
-  private void compressRenames(RenamePropertyType rename, ArrayList<RenamePropertyType> working) {
-    for (int i = 0; i < working.size(); i++) {
-      var w = working.get(i);
-      if (w.to.equals(rename.from)) {
-        working.set(i, new RenamePropertyType(w.from, rename.to));
-      }
-    }
-    // Finally, add the rename operation to the end of the list
-    working.add(rename);
   }
 
   /**

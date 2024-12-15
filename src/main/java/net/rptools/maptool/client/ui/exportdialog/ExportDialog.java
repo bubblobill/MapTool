@@ -19,7 +19,9 @@ import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.Rectangle;
 import java.awt.Transparency;
+import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
@@ -33,11 +35,7 @@ import javax.annotation.Nullable;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageWriter;
 import javax.imageio.event.IIOWriteProgressListener;
-import javax.swing.JButton;
-import javax.swing.JDialog;
-import javax.swing.JFileChooser;
-import javax.swing.JLabel;
-import javax.swing.JToggleButton;
+import javax.swing.*;
 import net.rptools.lib.net.FTPLocation;
 import net.rptools.lib.net.LocalLocation;
 import net.rptools.lib.net.Location;
@@ -49,9 +47,9 @@ import net.rptools.maptool.client.ui.ZoneImageGenerator;
 import net.rptools.maptool.client.ui.zone.PlayerView;
 import net.rptools.maptool.client.ui.zone.renderer.ZoneRenderer;
 import net.rptools.maptool.language.I18N;
+import net.rptools.maptool.model.Token;
 import net.rptools.maptool.model.Zone;
-import net.rptools.maptool.model.drawing.DrawablePaint;
-import net.rptools.maptool.model.drawing.DrawableTexturePaint;
+import net.rptools.maptool.model.drawing.*;
 import net.rptools.maptool.model.player.Player;
 import net.rptools.maptool.util.ImageManager;
 import org.apache.logging.log4j.LogManager;
@@ -64,6 +62,13 @@ import org.apache.logging.log4j.Logger;
  * the 'board' image/tile. The file can be saved to disk or sent to an FTP location.
  */
 public class ExportDialog extends JDialog implements IIOWriteProgressListener {
+  public enum Status {
+    OK,
+    CANCEL
+  }
+
+  private ExportDialog.Status status;
+
   //
   // Dialog/ UI related vars
   //
@@ -426,6 +431,20 @@ public class ExportDialog extends JDialog implements IIOWriteProgressListener {
     interactPanel.getButton("exportButton").addActionListener(evt -> exportButtonAction());
     interactPanel.getButton("cancelButton").addActionListener(evt -> dispose());
     interactPanel.getButton("browseButton").addActionListener(evt -> browseButtonAction());
+
+    // Escape key
+    interactPanel
+        .getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+        .put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "cancel");
+    interactPanel
+        .getActionMap()
+        .put(
+            "cancel",
+            new AbstractAction() {
+              public void actionPerformed(ActionEvent e) {
+                cancel();
+              }
+            });
   }
 
   @Override
@@ -448,6 +467,11 @@ public class ExportDialog extends JDialog implements IIOWriteProgressListener {
       }
     }
     super.setVisible(b);
+  }
+
+  private void cancel() {
+    status = ExportDialog.Status.CANCEL;
+    setVisible(false);
   }
 
   //
@@ -664,7 +688,7 @@ public class ExportDialog extends JDialog implements IIOWriteProgressListener {
 
   public Map<String, Boolean> getExportSettings() {
     Map<String, Boolean> settings = new HashMap<>(16);
-    for (var component : interactPanel.getAllCompoments()) {
+    for (var component : interactPanel.getAllComponents()) {
       if (component instanceof JToggleButton jtb) {
         settings.put(jtb.getName(), jtb.isSelected());
       }
@@ -677,7 +701,7 @@ public class ExportDialog extends JDialog implements IIOWriteProgressListener {
    * turned on, since {@link #enforceButtonRules()} will turn them back on as appropriate.
    */
   private void resetExportSettings() {
-    for (var component : interactPanel.getAllCompoments()) {
+    for (var component : interactPanel.getAllComponents()) {
       if (component instanceof JToggleButton jtb) {
         jtb.setSelected(false);
       }
@@ -776,7 +800,7 @@ public class ExportDialog extends JDialog implements IIOWriteProgressListener {
     //
     Player.Role viewRole = viewAsPlayer ? Player.Role.PLAYER : Player.Role.GM;
     PlayerView view = renderer.getPlayerView(viewRole, false);
-    Rectangle extents = renderer.zoneExtents(view);
+    Rectangle extents = zoneExtents(view);
     try {
       // Clip to what the players know about (if applicable).
       // This keeps the player from exporting the map to learn which
@@ -841,6 +865,127 @@ public class ExportDialog extends JDialog implements IIOWriteProgressListener {
 
     waitingForPostScreenshot = true;
     return view;
+  }
+
+  public Rectangle fogExtents() {
+    return zone.getExposedArea().getBounds();
+  }
+
+  /**
+   * Get a bounding box, in Zone coordinates, of all the elements in the zone. This method was
+   * created by copying renderZone() and then replacing each bit of rendering with a routine to
+   * simply aggregate the extents of the object that would have been rendered.
+   *
+   * @param view the player view
+   * @return a new Rectangle with the bounding box of all the elements in the Zone
+   */
+  public Rectangle zoneExtents(PlayerView view) {
+    // Can't initialize extents to any set x/y values, because
+    // we don't know if the actual map contains that x/y.
+    // So we need a flag to say extents is 'unset', and the best I
+    // could come up with is checking for 'null' on each loop iteration.
+    Rectangle extents = null;
+
+    // We don't iterate over the layers in the same order as rendering
+    // because its cleaner to group them by type and the order doesn't matter.
+
+    // First background image extents
+    // TODO: when the background image can be resized, fix this!
+    if (zone.getMapAssetId() != null) {
+      extents =
+          new Rectangle(
+              zone.getBoardX(),
+              zone.getBoardY(),
+              ImageManager.getImage(zone.getMapAssetId(), this).getWidth(),
+              ImageManager.getImage(zone.getMapAssetId(), this).getHeight());
+    }
+    // next, extents of drawing objects
+    List<DrawnElement> drawableList = zone.getAllDrawnElements();
+    for (DrawnElement element : drawableList) {
+      if (!view.isGMView() && !element.getDrawable().getLayer().isVisibleToPlayers()) {
+        continue;
+      }
+
+      Drawable drawable = element.getDrawable();
+      Rectangle drawnBounds = new Rectangle(drawable.getBounds(zone));
+
+      // Handle pen size
+      // This slightly over-estimates the size of the pen, but we want to
+      // make sure to include the anti-aliased edges.
+      Pen pen = element.getPen();
+      int penSize = (int) Math.ceil((pen.getThickness() / 2) + 1);
+      drawnBounds.setBounds(
+          drawnBounds.x - penSize,
+          drawnBounds.y - penSize,
+          drawnBounds.width + (penSize * 2),
+          drawnBounds.height + (penSize * 2));
+
+      if (extents == null) {
+        extents = drawnBounds;
+      } else {
+        extents.add(drawnBounds);
+      }
+    }
+    // now, add the stamps/tokens
+    // tokens and stamps are the same thing, just treated differently
+
+    // Note: order doesn't matter, so don't need to go back-to-front.
+    for (Token element :
+        zone.getTokensForLayers(layer -> view.isGMView() || layer.isVisibleToPlayers())) {
+      Rectangle drawnBounds = element.getBounds(zone);
+      if (element.hasFacing()) {
+        // Get the facing and do a quick fix to make the math easier: -90 is 'unrotated' for some
+        // reason
+        int facing = element.getFacing() + 90;
+        if (facing > 180) {
+          facing -= 360;
+        }
+        // if 90 degrees, just swap w and h
+        // also swap them if rotated more than 90 (optimization for non-90deg rotations)
+        if (facing != 0 && facing != 180) {
+          if (Math.abs(facing) >= 90) {
+            drawnBounds.setSize(drawnBounds.height, drawnBounds.width); // swapping h and w
+          }
+          // if rotated to non-axis direction, assume the worst case 45 deg
+          // also assumes the rectangle rotates around its center
+          // This will usually make the bounds bigger than necessary, but its quick.
+          // Also, for quickness, we assume its a square token using the larger dimension
+          // At 45 deg, the bounds of the square will be sqrt(2) bigger, and the UL corner will
+          // shift by 1/2 of the length.
+          // The size increase is: (sqrt*(2) - 1) * size ~= 0.42 * size.
+          if (facing != 0 && facing != 180 && facing != 90 && facing != -90) {
+            int size = Math.max(drawnBounds.width, drawnBounds.height);
+            int x = drawnBounds.x - (int) (0.21 * size);
+            int y = drawnBounds.y - (int) (0.21 * size);
+            int w = drawnBounds.width + (int) (0.42 * size);
+            int h = drawnBounds.height + (int) (0.42 * size);
+            drawnBounds.setBounds(x, y, w, h);
+          }
+        }
+      }
+      // TODO: Handle auras here?
+      if (extents == null) {
+        extents = drawnBounds;
+      } else {
+        extents.add(drawnBounds);
+      }
+    }
+    if (zone.hasFog()) {
+      if (extents == null) {
+        extents = fogExtents();
+      } else {
+        extents.add(fogExtents());
+      }
+    }
+    // TODO: What are token templates?
+    // renderTokenTemplates(g2d, view);
+
+    // TODO: Do lights make the area of interest larger?
+    // see: renderLights(g2d, view);
+
+    // TODO: Do auras make the area of interest larger?
+    // see: renderAuras(g2d, view);
+    return extents;
   }
 
   private void postScreenshot() {

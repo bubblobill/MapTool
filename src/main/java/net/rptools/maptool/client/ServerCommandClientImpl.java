@@ -21,8 +21,9 @@ import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
+import javax.annotation.Nullable;
 import net.rptools.lib.MD5Key;
 import net.rptools.maptool.client.functions.ExecFunction;
 import net.rptools.maptool.client.functions.MacroLinkFunction;
@@ -36,6 +37,7 @@ import net.rptools.maptool.model.gamedata.proto.GameDataDto;
 import net.rptools.maptool.model.gamedata.proto.GameDataValueDto;
 import net.rptools.maptool.model.library.addon.TransferableAddOnLibrary;
 import net.rptools.maptool.model.player.Player;
+import net.rptools.maptool.model.topology.WallTopology;
 import net.rptools.maptool.server.Mapper;
 import net.rptools.maptool.server.ServerCommand;
 import net.rptools.maptool.server.ServerMessageHandler;
@@ -51,14 +53,25 @@ import org.apache.logging.log4j.Logger;
  * the {@link ServerMessageHandler ServerMessageHandler}
  */
 public class ServerCommandClientImpl implements ServerCommand {
-
-  private final TimedEventQueue movementUpdateQueue = new TimedEventQueue(100);
-  private final LinkedBlockingQueue<MD5Key> assetRetrieveQueue = new LinkedBlockingQueue<MD5Key>();
   private static final Logger log = LogManager.getLogger(ServerCommandClientImpl.class);
 
-  public ServerCommandClientImpl() {
-    movementUpdateQueue.start();
-    // new AssetRetrievalThread().start();
+  private final MapToolClient client;
+  private final TimedEventQueue movementUpdateQueue = new TimedEventQueue(100);
+
+  public ServerCommandClientImpl(MapToolClient client) {
+    this.client = client;
+  }
+
+  public void start() {
+    try {
+      movementUpdateQueue.start();
+    } catch (IllegalThreadStateException e) {
+      log.error("ServerCommand was already started", e);
+    }
+  }
+
+  public void stop() {
+    movementUpdateQueue.stopRunning();
   }
 
   public void heartbeat(String data) {
@@ -88,10 +101,19 @@ public class ServerCommandClientImpl implements ServerCommand {
   }
 
   public void setCampaignName(String name) {
-    MapTool.getCampaign().setName(name);
+    client.getCampaign().setName(name);
     MapTool.getFrame().setTitle();
     var msg = SetCampaignNameMsg.newBuilder().setName(name);
     makeServerCall(Message.newBuilder().setSetCampaignNameMsg(msg).build());
+  }
+
+  public void setLandingMap(@Nullable GUID landingMapId) {
+    client.getCampaign().setLandingMapId(landingMapId);
+    var msg = SetCampaignLandingMapMsg.newBuilder();
+    if (landingMapId != null) {
+      msg.setLandingMapId(landingMapId.toString());
+    }
+    makeServerCall(Message.newBuilder().setSetCampaignLandingMapMsg(msg).build());
   }
 
   public void setVisionType(GUID zoneGUID, VisionType visionType) {
@@ -166,7 +188,7 @@ public class ServerCommandClientImpl implements ServerCommand {
   }
 
   public void editToken(GUID zoneGUID, Token token) {
-    MapTool.getCampaign().getZone(zoneGUID).editToken(token);
+    client.getCampaign().getZone(zoneGUID).editToken(token);
     var msg = EditTokenMsg.newBuilder().setZoneGuid(zoneGUID.toString()).setToken(token.toDto());
     makeServerCall(Message.newBuilder().setEditTokenMsg(msg).build());
   }
@@ -175,7 +197,7 @@ public class ServerCommandClientImpl implements ServerCommand {
     // Hack to generate zone event. All functions that update tokens call this method
     // after changing the token. But they don't tell the zone about it so classes
     // waiting for the zone change event don't get it.
-    MapTool.getCampaign().getZone(zoneGUID).putToken(token);
+    client.getCampaign().getZone(zoneGUID).putToken(token);
     var msg = PutTokenMsg.newBuilder().setZoneGuid(zoneGUID.toString()).setToken(token.toDto());
     makeServerCall(Message.newBuilder().setPutTokenMsg(msg).build());
   }
@@ -183,7 +205,7 @@ public class ServerCommandClientImpl implements ServerCommand {
   @Override
   public void removeToken(GUID zoneGUID, GUID tokenGUID) {
     // delete local token immediately
-    MapTool.getCampaign().getZone(zoneGUID).removeToken(tokenGUID);
+    client.getCampaign().getZone(zoneGUID).removeToken(tokenGUID);
     var msg =
         RemoveTokenMsg.newBuilder()
             .setZoneGuid(zoneGUID.toString())
@@ -194,7 +216,7 @@ public class ServerCommandClientImpl implements ServerCommand {
   @Override
   public void removeTokens(GUID zoneGUID, List<GUID> tokenGUIDs) {
     // delete local tokens immediately
-    MapTool.getCampaign().getZone(zoneGUID).removeTokens(tokenGUIDs);
+    client.getCampaign().getZone(zoneGUID).removeTokens(tokenGUIDs);
     var msg = RemoveTokensMsg.newBuilder().setZoneGuid(zoneGUID.toString());
     msg.addAllTokenGuid(tokenGUIDs.stream().map(t -> t.toString()).collect(Collectors.toList()));
     makeServerCall(Message.newBuilder().setRemoveTokensMsg(msg).build());
@@ -393,23 +415,28 @@ public class ServerCommandClientImpl implements ServerCommand {
     makeServerCall(Message.newBuilder().setToggleTokenMoveWaypointMsg(msg).build());
   }
 
-  public void addTopology(GUID zoneGUID, Area area, Zone.TopologyType topologyType) {
+  public void replaceWalls(Zone zone, WallTopology walls) {
+    zone.replaceWalls(walls);
     var msg =
-        AddTopologyMsg.newBuilder()
-            .setZoneGuid(zoneGUID.toString())
-            .setType(TopologyTypeDto.valueOf(topologyType.name()))
-            .setArea(Mapper.map(area));
-
-    makeServerCall(Message.newBuilder().setAddTopologyMsg(msg).build());
+        SetWallTopologyMsg.newBuilder()
+            .setZoneGuid(zone.getId().toString())
+            .setTopology(walls.toDto());
+    makeServerCall(Message.newBuilder().setSetWallTopologyMsg(msg).build());
   }
 
-  public void removeTopology(GUID zoneGUID, Area area, Zone.TopologyType topologyType) {
+  @Override
+  public void updateMaskTopology(
+      Zone zone, Area area, boolean erase, Zone.TopologyType topologyType) {
     var msg =
-        RemoveTopologyMsg.newBuilder()
-            .setZoneGuid(zoneGUID.toString())
+        UpdateMaskTopologyMsg.newBuilder()
+            .setZoneGuid(zone.getId().toString())
             .setArea(Mapper.map(area))
+            .setErase(erase)
             .setType(TopologyTypeDto.valueOf(topologyType.name()));
-    makeServerCall(Message.newBuilder().setRemoveTopologyMsg(msg).build());
+
+    // Update locally as well.
+    zone.updateMaskTopology(area, erase, topologyType);
+    makeServerCall(Message.newBuilder().setUpdateMaskTopologyMsg(msg).build());
   }
 
   public void exposePCArea(GUID zoneGUID) {
@@ -419,7 +446,7 @@ public class ServerCommandClientImpl implements ServerCommand {
 
   public void exposeFoW(GUID zoneGUID, Area area, Set<GUID> selectedToks) {
     // Expose locally right away.
-    MapTool.getCampaign().getZone(zoneGUID).exposeArea(area, selectedToks);
+    client.getCampaign().getZone(zoneGUID).exposeArea(area, selectedToks);
     var msg = ExposeFowMsg.newBuilder().setZoneGuid(zoneGUID.toString()).setArea(Mapper.map(area));
     msg.addAllTokenGuid(selectedToks.stream().map(g -> g.toString()).collect(Collectors.toList()));
     makeServerCall(Message.newBuilder().setExposeFowMsg(msg).build());
@@ -518,9 +545,15 @@ public class ServerCommandClientImpl implements ServerCommand {
     makeServerCall(Message.newBuilder().setClearExposedAreaMsg(msg).build());
   }
 
-  private static void makeServerCall(Message msg) {
-    if (MapTool.getConnection() != null) {
-      MapTool.getConnection().sendMessage(msg);
+  private void makeServerCall(Message msg) {
+    log.debug(
+        "{} making server call {}; state is {}",
+        client.getPlayer().getName(),
+        msg.getMessageTypeCase(),
+        client.getState());
+
+    if (client.getState() == MapToolClient.State.Connected) {
+      client.getConnection().sendMessage(msg);
     }
   }
 
@@ -619,6 +652,32 @@ public class ServerCommandClientImpl implements ServerCommand {
   }
 
   @Override
+  public void toggleLightSourceOnToken(Token token, boolean toggleOn, LightSource lightSource) {
+    var update = toggleOn ? Token.Update.addLightSource : Token.Update.removeLightSource;
+    // We only need to send the ID of the light source.
+    updateTokenProperty(
+        token,
+        update,
+        TokenPropertyValueDto.newBuilder()
+            .setLightSourceId(lightSource.getId().toString())
+            .build());
+  }
+
+  public void setTokenMaskTopology(
+      Token token, @Nullable Area area, Zone.TopologyType topologyType) {
+    if (area == null) {
+      // Will be converted back to null on the other end.
+      area = new Area();
+    }
+
+    updateTokenProperty(
+        token,
+        Token.Update.setMaskTopology,
+        TokenPropertyValueDto.newBuilder().setTopologyType(topologyType.name()).build(),
+        TokenPropertyValueDto.newBuilder().setArea(Mapper.map(area)).build());
+  }
+
+  @Override
   public void updateTokenProperty(Token token, Token.Update update, int value) {
     updateTokenProperty(
         token, update, TokenPropertyValueDto.newBuilder().setIntValue(value).build());
@@ -670,20 +729,6 @@ public class ServerCommandClientImpl implements ServerCommand {
   public void updateTokenProperty(Token token, Token.Update update, String value) {
     updateTokenProperty(
         token, update, TokenPropertyValueDto.newBuilder().setStringValue(value).build());
-  }
-
-  @Override
-  public void updateTokenProperty(Token token, Token.Update update, LightSource value) {
-    if (update == Token.Update.createUniqueLightSource) {
-      // This case requires sending the full light source definition.
-      updateTokenProperty(
-          token, update, TokenPropertyValueDto.newBuilder().setLightSource(value.toDto()).build());
-    } else {
-      updateTokenProperty(
-          token,
-          update,
-          TokenPropertyValueDto.newBuilder().setLightSourceId(value.getId().toString()).build());
-    }
   }
 
   @Override
@@ -759,16 +804,6 @@ public class ServerCommandClientImpl implements ServerCommand {
   }
 
   @Override
-  public void updateTokenProperty(
-      Token token, Token.Update update, Zone.TopologyType topologyType, Area area) {
-    updateTokenProperty(
-        token,
-        update,
-        TokenPropertyValueDto.newBuilder().setTopologyType(topologyType.name()).build(),
-        TokenPropertyValueDto.newBuilder().setArea(Mapper.map(area)).build());
-  }
-
-  @Override
   public void updateTokenProperty(Token token, Token.Update update, String value1, boolean value2) {
     updateTokenProperty(
         token,
@@ -803,16 +838,24 @@ public class ServerCommandClientImpl implements ServerCommand {
    * some time interval. If a new event arrives before the time interval elapses, it is replaced. In
    * this way, only the most current version of the event is released.
    */
-  private static class TimedEventQueue extends Thread {
-
-    Message msg;
-    long delay;
-
-    final Object sleepSemaphore = new Object();
+  private class TimedEventQueue extends Thread {
+    private final AtomicBoolean done = new AtomicBoolean(false);
+    private final long delay;
+    private Message msg;
 
     public TimedEventQueue(long millidelay) {
       setName("ServerCommandClientImpl.TimedEventQueue");
       delay = millidelay;
+    }
+
+    public void stopRunning() {
+      done.set(true);
+      try {
+        interrupt();
+        join();
+      } catch (InterruptedException e) {
+        log.error("Interrupted thread join. Thread may not be done running.", e);
+      }
     }
 
     public void enqueue(Message message) {
@@ -820,7 +863,6 @@ public class ServerCommandClientImpl implements ServerCommand {
     }
 
     public synchronized void flush() {
-
       if (msg != null) {
         makeServerCall(msg);
         msg = null;
@@ -829,16 +871,12 @@ public class ServerCommandClientImpl implements ServerCommand {
 
     @Override
     public void run() {
-
-      while (true) {
-
+      while (!done.get()) {
         flush();
-        synchronized (sleepSemaphore) {
-          try {
-            Thread.sleep(delay);
-          } catch (InterruptedException ie) {
-            // nothing to do
-          }
+        try {
+          Thread.sleep(delay);
+        } catch (InterruptedException ie) {
+          // nothing to do
         }
       }
     }

@@ -23,6 +23,12 @@ public class ScreenPoint extends Point2D.Double {
     super(x, y);
   }
 
+  public static Point2D.Double convertToZone2d(ZoneRenderer renderer, double x, double y) {
+    double scale = renderer.getScale();
+    return new Point2D.Double(
+        (x - renderer.getViewOffsetX()) / scale, (y - renderer.getViewOffsetY()) / scale);
+  }
+
   /**
    * Translate the point from screen x,y to zone x,y.
    *
@@ -33,23 +39,8 @@ public class ScreenPoint extends Point2D.Double {
    * @return the {@link ZonePoint} representing the screen point.
    */
   public static ZonePoint convertToZone(ZoneRenderer renderer, double x, double y) {
-    double scale = renderer.getScale();
-
-    double zX = x;
-    double zY = y;
-
-    // Translate
-    zX -= renderer.getViewOffsetX();
-    zY -= renderer.getViewOffsetY();
-
-    // Scale
-    zX = (int) Math.floor(zX / scale);
-    zY = (int) Math.floor(zY / scale);
-
-    // System.out.println("s:" + scale + " x:" + x + " zx:" + zX + " c:" + (zX / scale) + " - " +
-    // Math.floor(zX / scale));
-
-    return new ZonePoint((int) zX, (int) zY);
+    var doublePrecision = convertToZone2d(renderer, x, y);
+    return new ZonePoint((int) Math.floor(doublePrecision.x), (int) Math.floor(doublePrecision.y));
   }
 
   /**

@@ -51,7 +51,6 @@ import net.rptools.maptool.client.MapTool;
 import net.rptools.maptool.client.MapToolVariableResolver;
 import net.rptools.maptool.client.functions.json.JSONMacroFunctions;
 import net.rptools.maptool.client.swing.SwingUtil;
-import net.rptools.maptool.client.ui.zone.renderer.SelectionSet;
 import net.rptools.maptool.client.ui.zone.renderer.ZoneRenderer;
 import net.rptools.maptool.language.I18N;
 import net.rptools.maptool.model.sheet.stats.StatSheetProperties;
@@ -207,13 +206,11 @@ public class Token implements Cloneable {
     setTerrainModifier,
     setTerrainModifierOperation,
     setTerrainModifiersIgnored,
-    setTopology,
+    setMaskTopology,
     setImageAsset,
     setPortraitImage,
     setCharsheetImage,
     setLayout,
-    createUniqueLightSource,
-    deleteUniqueLightSource,
     clearLightSources,
     removeLightSource,
     addLightSource,
@@ -245,8 +242,6 @@ public class Token implements Cloneable {
   private int lastY;
   private Path<? extends AbstractPoint> lastPath;
 
-  // Lee: for use in added path calculations
-  private transient ZonePoint tokenOrigin = null;
   private boolean snapToScale = true; // Whether the scaleX and scaleY represent snap-to-grid
   // measurements
 
@@ -270,11 +265,16 @@ public class Token implements Cloneable {
   private int alwaysVisibleTolerance = 2; // Default for # of regions (out of 9) that must be seen
   // before token is shown over FoW
   private boolean isAlwaysVisible = false; // Controls whether a Token is shown over VBL
+
+  // region Topology masks
+
   private Area vbl;
   private Area hillVbl;
   private Area pitVbl;
   private Area coverVbl;
   private Area mbl;
+
+  // endregion
 
   private String name = "";
   private Set<String> ownerList = new HashSet<>();
@@ -856,12 +856,16 @@ public class Token implements Cloneable {
     return facing != null;
   }
 
-  public void setFacing(Integer facing) {
-    while (facing != null && (facing > 180 || facing < -179)) {
+  public void setFacing(int facing) {
+    while (facing > 180 || facing < -179) {
       facing += facing > 180 ? -360 : 0;
       facing += facing < -179 ? 360 : 0;
     }
     this.facing = facing;
+  }
+
+  public void removeFacing() {
+    this.facing = null;
   }
 
   /**
@@ -872,34 +876,21 @@ public class Token implements Cloneable {
    *
    * @return null or angle in degrees
    */
-  public Integer getFacing() {
-    return facing;
+  public int getFacing() {
+    // -90° is natural alignment. TODO This should really be a per grid setting
+    return facing == null ? -90 : facing;
   }
 
   /**
    * This returns the rotation of the facing of the token from the default facing of down or -90.
-   * Positive for CW and negative for CCW.
+   *
+   * <p>Positive for CW and negative for CCW. The range is currently from -270° (inclusive) to +90°
+   * (exclusive), but callers should not rely on this.
    *
    * @return angle in degrees
    */
-  public Integer getFacingInDegrees() {
-    if (facing == null) {
-      return 0;
-    } else {
-      return -(facing + 90);
-    }
-  }
-
-  public Integer getFacingInRealDegrees() {
-    if (facing == null) {
-      return 270;
-    }
-
-    if (facing >= 0) {
-      return facing;
-    } else {
-      return facing + 360;
-    }
+  public int getFacingInDegrees() {
+    return -getFacing() - 90;
   }
 
   public boolean getHasSight() {
@@ -931,6 +922,10 @@ public class Token implements Cloneable {
 
   public void removeUniqueLightSource(GUID lightSourceId) {
     uniqueLightSources.remove(lightSourceId);
+  }
+
+  public void removeAllUniqueLightsources() {
+    uniqueLightSources.clear();
   }
 
   public void addLightSource(GUID lightSourceId) {
@@ -1288,46 +1283,6 @@ public class Token implements Cloneable {
     this.y = y;
   }
 
-  // Lee: added functions necessary for path computations
-  public void setOriginPoint(ZonePoint p) {
-    tokenOrigin = p;
-  }
-
-  public ZonePoint getOriginPoint() {
-    if (tokenOrigin == null) {
-      tokenOrigin = new ZonePoint(getX(), getY());
-    }
-
-    return tokenOrigin;
-  }
-
-  /*
-   * Lee: changing this to apply new X and Y values (as end point) for the token BEFORE its path is
-   * computed. Path to be saved will be computed here instead of in ZoneRenderer
-   */
-  public void applyMove(
-      SelectionSet set,
-      Path<? extends AbstractPoint> followerPath,
-      int xOffset,
-      int yOffset,
-      Token keyToken,
-      int cellOffX,
-      int cellOffY) {
-    setX(x + xOffset);
-    setY(y + yOffset);
-    lastPath =
-        followerPath != null
-            ? followerPath.derive(
-                set,
-                keyToken,
-                this,
-                cellOffX,
-                cellOffY,
-                getOriginPoint(),
-                new ZonePoint(getX(), getY()))
-            : null;
-  }
-
   public void setLastPath(Path<? extends AbstractPoint> path) {
     lastPath = path;
   }
@@ -1361,6 +1316,12 @@ public class Token implements Cloneable {
   }
 
   /**
+   * Returns whether the token is constrained to a pre-defined grid size.
+   *
+   * <p>If {@code false}, this implies the token is either natively sized or free sized. If {@code
+   * true}, the token is sized according to one of the grid's pre-defined sizes, and has a
+   * meaningful footprint.
+   *
    * @return Returns the snapScale.
    */
   public boolean isSnapToScale() {
@@ -1437,7 +1398,7 @@ public class Token implements Cloneable {
    * @param topologyType The type of topology to return.
    * @return the current topology of the token.
    */
-  public Area getTopology(Zone.TopologyType topologyType) {
+  public Area getMaskTopology(Zone.TopologyType topologyType) {
     return switch (topologyType) {
       case WALL_VBL -> vbl;
       case HILL_VBL -> hillVbl;
@@ -1453,8 +1414,8 @@ public class Token implements Cloneable {
    * @param topologyType The type of topology to transform.
    * @return the transformed topology for the token
    */
-  public Area getTransformedTopology(Zone.TopologyType topologyType) {
-    return getTransformedTopology(getTopology(topologyType));
+  public Area getTransformedMaskTopology(Zone.TopologyType topologyType) {
+    return getTransformedMaskTopology(getMaskTopology(topologyType));
   }
 
   /**
@@ -1465,7 +1426,11 @@ public class Token implements Cloneable {
    * @param topologyType The type of topology to set.
    * @param topology the topology area to set.
    */
-  public void setTopology(Zone.TopologyType topologyType, @Nullable Area topology) {
+  public void setMaskTopology(Zone.TopologyType topologyType, @Nullable Area topology) {
+    if (topology != null && topology.isEmpty()) {
+      topology = null;
+    }
+
     switch (topologyType) {
       case WALL_VBL -> vbl = topology;
       case HILL_VBL -> hillVbl = topology;
@@ -1473,21 +1438,19 @@ public class Token implements Cloneable {
       case COVER_VBL -> coverVbl = topology;
       case MBL -> mbl = topology;
     }
-    ;
 
-    if (!hasAnyTopology()) {
+    if (!hasAnyMaskTopology()) {
       vblColorSensitivity = -1;
     }
   }
 
   /**
-   * Return the existence of the requested type of topology.
-   *
-   * @param topologyType The type of topology to check for.
-   * @return true if the token has the given type of topology.
+   * @return All types of mask topology attached to the token.
    */
-  public boolean hasTopology(Zone.TopologyType topologyType) {
-    return getTopology(topologyType) != null;
+  public Collection<Zone.TopologyType> getMaskTopologyTypes() {
+    var result = EnumSet.allOf(Zone.TopologyType.class);
+    result.removeIf(type -> getMaskTopology(type) == null);
+    return result;
   }
 
   /**
@@ -1495,9 +1458,9 @@ public class Token implements Cloneable {
    *
    * @return true if the token has any kind of topology.
    */
-  public boolean hasAnyTopology() {
+  public boolean hasAnyMaskTopology() {
     return Arrays.stream(Zone.TopologyType.values())
-        .map(this::getTopology)
+        .map(this::getMaskTopology)
         .anyMatch(Objects::nonNull);
   }
 
@@ -1510,7 +1473,7 @@ public class Token implements Cloneable {
    * @author Jamz
    * @since 1.4.1.5
    */
-  public Area getTransformedTopology(Area areaToTransform) {
+  public Area getTransformedMaskTopology(Area areaToTransform) {
     if (areaToTransform == null) {
       return null;
     }
@@ -1636,29 +1599,67 @@ public class Token implements Cloneable {
   }
 
   /**
-   * Returns the drag offset of the token.
+   * Return the drag anchor of the token.
    *
-   * @param zone the zone where the token is dragged
-   * @return a point representing the offset
+   * <p>The drag anchor is the point relative to which a drag should be applied. For snap-to-grid
+   * tokens, this will affect which cell they land in. For non-snap-to-grid tokens, this will effect
+   * where the path line is drawn.
+   *
+   * @param zone The zone where the token is being dragged.
+   * @return The drag anchor of the token.
    */
-  public Point getDragOffset(Zone zone) {
+  public ZonePoint getDragAnchor(Zone zone) {
     Grid grid = zone.getGrid();
-    int offsetX, offsetY;
+    int dragAnchorX, dragAnchorY;
     if (isSnapToGrid() && grid.getCapabilities().isSnapToGridSupported()) {
-      if (!getLayer().anchorSnapToGridAtCenter() || isSnapToScale() || getLayer().isTokenLayer()) {
+      if (!getLayer().isStampLayer() || !getLayer().anchorSnapToGridAtCenter() || isSnapToScale()) {
         Point2D.Double centerOffset = grid.getCenterOffset();
-        offsetX = getX() + (int) centerOffset.x;
-        offsetY = getY() + (int) centerOffset.y;
+        dragAnchorX = getX() + (int) centerOffset.x;
+        dragAnchorY = getY() + (int) centerOffset.y;
       } else {
+        // Anchor at the layout center.
         Rectangle tokenBounds = getBounds(zone);
-        offsetX = tokenBounds.x + tokenBounds.width / 2;
-        offsetY = tokenBounds.y + tokenBounds.height / 2;
+        dragAnchorX = tokenBounds.x + tokenBounds.width / 2 - anchorX;
+        dragAnchorY = tokenBounds.y + tokenBounds.height / 2 - anchorY;
       }
     } else {
-      offsetX = getX();
-      offsetY = getY();
+      dragAnchorX = getX() + anchorX;
+      dragAnchorY = getY() + anchorY;
     }
-    return new Point(offsetX, offsetY);
+
+    return new ZonePoint(dragAnchorX, dragAnchorY);
+  }
+
+  /**
+   * Updates the token's position so its anchor is located at {@code newDragAnchorPosition}.
+   *
+   * @param zone The zone in which the token is moving.
+   * @param newDragAnchorPosition The new position that the anchor should be located at.
+   */
+  public void moveDragAnchorTo(Zone zone, ZonePoint newDragAnchorPosition) {
+    var anchor = getDragAnchor(zone);
+    var offsetX = anchor.x - getX();
+    var offsetY = anchor.y - getY();
+
+    setX(newDragAnchorPosition.x - offsetX);
+    setY(newDragAnchorPosition.y - offsetY);
+  }
+
+  /**
+   * Like {@link #getDragAnchor(Zone)}, but assume the token is in cell {@code cellPoint}.
+   *
+   * @param zone The zone that the token lives in.
+   * @param cellPoint The cell in which the token should pretend to be located.
+   * @return The drag anchor the token would have if located at {@code cellPoint}.
+   */
+  public ZonePoint getDragAnchorAsIfLocatedInCell(Zone zone, CellPoint cellPoint) {
+    ZonePoint anchor = getDragAnchor(zone);
+    ZonePoint nearestGridCellVertex = zone.getGrid().convert(zone.getGrid().convert(anchor));
+    ZonePoint targetCellVertex = zone.getGrid().convert(cellPoint);
+
+    return new ZonePoint(
+        targetCellVertex.x + (anchor.x - nearestGridCellVertex.x),
+        targetCellVertex.y + (anchor.y - nearestGridCellVertex.y));
   }
 
   /**
@@ -2559,6 +2560,9 @@ public class Token implements Cloneable {
     }
     if (uniqueLightSources == null) {
       uniqueLightSources = new LinkedHashMap<>();
+    } else {
+      // Whatever type of map is present, we want an order-preserving linked hash map.
+      uniqueLightSources = new LinkedHashMap<>(uniqueLightSources);
     }
 
     // Remove null and duplicate attached light sources.
@@ -2683,6 +2687,7 @@ public class Token implements Cloneable {
     boolean lightChanged = false;
     boolean macroChanged = false;
     boolean panelLookChanged = false; // appearance of token in a panel changed
+    Zone.TopologyType topologyChangeType = null;
     switch (update) {
       case setState:
         var state = parameters.get(0).getStringValue();
@@ -2751,7 +2756,7 @@ public class Token implements Cloneable {
         setFacing(parameters.get(0).getIntValue());
         break;
       case removeFacing:
-        setFacing(null);
+        removeFacing();
         break;
       case clearAllOwners:
         clearAllOwners();
@@ -2845,14 +2850,11 @@ public class Token implements Cloneable {
                 .map(TerrainModifierOperation::valueOf)
                 .collect(Collectors.toSet()));
         break;
-      case setTopology:
+      case setMaskTopology:
         {
           final var topologyType = Zone.TopologyType.valueOf(parameters.get(0).getTopologyType());
-          setTopology(topologyType, Mapper.map(parameters.get(1).getArea()));
-          if (!hasTopology(topologyType)) { // if topology removed
-            zone.tokenTopologyChanged(); // if token lost topology, TOKEN_CHANGED won't update
-            // topology
-          }
+          setMaskTopology(topologyType, Mapper.map(parameters.get(1).getArea()));
+          topologyChangeType = topologyType;
           break;
         }
       case setImageAsset:
@@ -2878,14 +2880,6 @@ public class Token implements Cloneable {
       case setLayout:
         setSizeScale(parameters.get(0).getDoubleValue());
         setAnchor(parameters.get(1).getIntValue(), parameters.get(2).getIntValue());
-        break;
-      case createUniqueLightSource:
-        lightChanged = true;
-        addUniqueLightSource(LightSource.fromDto(parameters.get(0).getLightSource()));
-        break;
-      case deleteUniqueLightSource:
-        lightChanged = true;
-        removeUniqueLightSource(GUID.valueOf(parameters.get(0).getLightSourceId()));
         break;
       case clearLightSources:
         if (hasLightSources()) {
@@ -2949,6 +2943,9 @@ public class Token implements Cloneable {
     }
     if (panelLookChanged) {
       zone.tokenPanelChanged(this);
+    }
+    if (topologyChangeType != null) {
+      zone.tokenMaskTopologyChanged(EnumSet.of(topologyChangeType));
     }
     zone.tokenChanged(this); // fire Event.TOKEN_CHANGED, which updates topology if token has VBL
   }

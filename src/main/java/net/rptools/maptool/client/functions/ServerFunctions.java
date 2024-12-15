@@ -17,6 +17,7 @@ package net.rptools.maptool.client.functions;
 import java.math.BigDecimal;
 import java.util.List;
 import net.rptools.maptool.client.MapTool;
+import net.rptools.maptool.client.MapToolClient;
 import net.rptools.maptool.language.I18N;
 import net.rptools.maptool.server.ServerPolicy;
 import net.rptools.parser.Parser;
@@ -46,9 +47,10 @@ public class ServerFunctions extends AbstractFunction {
 
     String fName = functionName.toLowerCase();
     return switch (fName) {
-      case "server.isserver" -> MapTool.isHostingServer() || MapTool.isPersonalServer()
-          ? BigDecimal.ONE
-          : BigDecimal.ZERO;
+      case "server.isserver" ->
+          MapTool.isHostingServer() || MapTool.isPersonalServer()
+              ? BigDecimal.ONE
+              : BigDecimal.ZERO;
       case "server.ishosting" -> MapTool.isHostingServer() ? BigDecimal.ONE : BigDecimal.ZERO;
       case "server.ispersonal" -> MapTool.isPersonalServer() ? BigDecimal.ONE : BigDecimal.ZERO;
       case "getmovelock" -> MapTool.getServerPolicy().isMovementLocked();
@@ -56,9 +58,11 @@ public class ServerFunctions extends AbstractFunction {
         if (parameters.size() == 1) {
           BigDecimal ml = (BigDecimal) parameters.get(0);
           if (ml.intValue() == 0 || ml.intValue() == 1) {
-            ServerPolicy policy = MapTool.getServerPolicy();
+            MapToolClient client = MapTool.getClient();
+            ServerPolicy policy = client.getServerPolicy();
             policy.setIsMovementLocked(ml.intValue() != 0);
-            MapTool.updateServerPolicy(policy);
+            client.setServerPolicy(policy);
+            client.getServerCommand().setServerPolicy(policy);
           } else {
             throw new ParserException(
                 I18N.getText("macro.function.general.argumentTypeInvalid", "setmovelock"));
@@ -69,8 +73,9 @@ public class ServerFunctions extends AbstractFunction {
         }
         yield "";
       }
-      default -> throw new ParserException(
-          I18N.getText("macro.function.general.unknownFunction", functionName));
+      default ->
+          throw new ParserException(
+              I18N.getText("macro.function.general.unknownFunction", functionName));
     };
   }
 }

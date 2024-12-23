@@ -134,7 +134,7 @@ javafx {
 }
 
 protobuf {
-    protoc { artifact = "com.google.protobuf:protoc:3.25.2" }
+    protoc { artifact = "com.google.protobuf:protoc:4.29.1" }
 }
 
 // Inform IDEs like IntelliJ IDEA, Eclipse or NetBeans about the generated code.
@@ -394,15 +394,15 @@ dependencies {
     implementation 'com.thoughtworks.xstream:xstream:1.4.20'
 
     // themes
-    implementation 'com.formdev:flatlaf:3.4.1'
-    implementation 'com.formdev:flatlaf-intellij-themes:3.4.1'
-    implementation 'com.formdev:flatlaf-extras:3.4.1'
+    implementation 'com.formdev:flatlaf:3.5.4'
+    implementation 'com.formdev:flatlaf-intellij-themes:3.5.4'
+    implementation 'com.formdev:flatlaf-extras:3.5.4'
     implementation 'com.github.weisj:jsvg:1.4.0'
-    implementation 'com.formdev:flatlaf-jide-oss:3.4.1'
+    implementation 'com.formdev:flatlaf-jide-oss:3.5.4'
 
     // JS support for macros
     implementation group: 'org.graalvm.js', name: 'js', version: '21.2.0'
-    implementation group: 'org.graalvm.js', name: 'js-scriptengine', version: '24.1.1'
+    implementation group: 'org.graalvm.js', name: 'js-scriptengine', version: '21.1.0'
 
     implementation 'com.jayway.jsonpath:json-path:2.9.0'
 

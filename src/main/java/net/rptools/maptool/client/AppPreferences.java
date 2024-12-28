@@ -15,17 +15,8 @@
 package net.rptools.maptool.client;
 
 import com.twelvemonkeys.image.ResampleOp;
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.io.File;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
-import java.util.prefs.Preferences;
-import javax.annotation.Nullable;
+import net.rptools.maptool.client.ui.theme.Halos;
+import net.rptools.maptool.client.ui.zone.renderer.Halo;
 import net.rptools.maptool.client.walker.WalkerMetric;
 import net.rptools.maptool.language.I18N;
 import net.rptools.maptool.model.GridFactory;
@@ -33,6 +24,16 @@ import net.rptools.maptool.model.Label;
 import net.rptools.maptool.model.Zone;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
+import javax.annotation.Nullable;
+import java.awt.*;
+import java.io.File;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+import java.util.prefs.Preferences;
 
 /** Manages and persists user preferences for the application. */
 public class AppPreferences {
@@ -87,8 +88,6 @@ public class AppPreferences {
   public static final Preference<Boolean> autoRevealVisionOnGMMovement =
       BooleanType.create("autoRevealVisionOnGMMove", false);
 
-  public static final Preference<Integer> haloOverlayOpacity =
-      ByteType.create("haloOverlayOpacity", 60);
 
   public static final Preference<Integer> auraOverlayOpacity =
       ByteType.create("auraOverlayOpacity", 60);
@@ -111,7 +110,18 @@ public class AppPreferences {
   public static final Preference<Boolean> lightsShowByDefault =
       BooleanType.create("lightsShowByDefault", true);
 
+  public static final Preference<Integer> haloOverlayOpacity =
+          ByteType.create("haloOverlayOpacity", 200);
+
+  public static final Preference<Float> haloLineWeight = FloatType.create("haloLineWeight", 2);
   public static final Preference<Integer> haloLineWidth = IntegerType.create("haloLineWidth", 2);
+  public static final Preference<Boolean> haloIsoFlip = BooleanType.create("haloIsoFlip", true);
+  public static final Preference<Boolean> haloUseFacing = BooleanType.create("haloUseFacing", true);
+  public static final Preference<Integer> haloType = IntegerType.create("haloType", Halo.Type.getDefaultIndex());
+  public static final Preference<Integer> haloStyle = IntegerType.create("haloStyle", Halo.Style.getDefaultIndex());
+  public static final Preference<Integer> haloImage = IntegerType.create("haloImage", Halos.getDefaultIndex());
+  public static final Preference<Integer> haloColor = IntegerType.create("haloColor", MapToolUtil.getRandomColor().getRGB());
+  public static final Preference<Boolean> haloFilled = BooleanType.create("haloFilled", false);
 
   public static final Preference<Integer> typingNotificationDurationInSeconds =
       IntegerType.create("typingNotificationDuration", 5);
@@ -666,6 +676,21 @@ public class AppPreferences {
     @Override
     public Double get(Preferences prefs, String key, Supplier<Double> defaultValue) {
       return prefs.getDouble(key, defaultValue.get());
+    }
+  }
+  private static final class FloatType implements Type<Float> {
+    public static Preference<Float> create(String key, float defaultValue) {
+      return new Preference<>(key, defaultValue, new FloatType());
+    }
+
+    @Override
+    public void set(Preferences prefs, String key, Float value) {
+      prefs.putFloat(key, value);
+    }
+
+    @Override
+    public Float get(Preferences prefs, String key, Supplier<Float> defaultValue) {
+      return prefs.getFloat(key, defaultValue.get());
     }
   }
 

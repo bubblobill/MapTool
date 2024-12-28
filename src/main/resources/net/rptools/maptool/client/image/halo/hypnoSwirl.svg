@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1280pt" height="1280pt" version="1.0" viewBox="0 0 1280 1280" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <path id="path21" d="m640 640c72 28 109 120 22 209-143 142-547 89-661-188 4.5 105 27 180 56 245 273 129 531 70 625-36 51-58 69-118 45-169-17-36-37-44-68-54m-20-5.8c-72-28-109-120-22-209 143-142 548-88 662 190-4.5-105-28-181-57-246-273-129-532-70-626 36-51 58-69 118-45 169 17 36 37 44 68 54" stroke-width=".1"/>
+  <use id="use21" transform="rotate(30 640 640)" xlink:href="#path21"/>
+  <use id="use22" transform="rotate(30 640 640)" xlink:href="#use21"/>
+  <use id="use23" transform="rotate(30 640 640)" xlink:href="#use22"/>
+  <use id="use24" transform="rotate(30 641 640)" xlink:href="#use23"/>
+  <use transform="rotate(30 640 640)" xlink:href="#use24"/>
+</svg>

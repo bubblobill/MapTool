@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg version="1.1" viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <path id="path3" d="m452 250c-0.66-2.6 1.7-5 4.2-5.3 3.7-0.48 6.8 2.7 7.1 6.3 0.35 4.8-3.8 8.6-8.4 8.8-5.8 0.22-10-4.8-11-10-0.11-6.8 5.9-12 13-12 7.5 0 14 6.3 14 14s6.4 14 14 14c6.7-0.02 13-5.4 13-12-0.1-5.6-4.7-11-11-10-4.6 0.18-8.8 4-8.4 8.8 0.25 3.6 3.3 6.8 7.1 6.3 2.5-0.33 4.8-2.6 4.2-5.3m-442-0.47c0.66 2.6-1.7 5-4.2 5.3-3.7 0.48-6.8-2.7-7.1-6.3-0.34-4.8 3.8-8.6 8.4-8.8 5.8-0.22 10 4.8 11 10 0.11 6.8-5.9 12-13 12-7.5 0-14-6.3-14-14s-6.4-14-14-14c-6.7 0.02-13 5.4-13 12 0.093 5.6 4.7 11 11 10 4.6-0.18 8.7-4 8.4-8.8-0.26-3.6-3.3-6.8-7.1-6.3-2.5 0.33-4.8 2.6-4.2 5.3" fill="none" stroke="#000" stroke-linecap="round" stroke-width="5"/>
+  <use id="use18" transform="rotate(10 250 250)" xlink:href="#path3"/>
+  <use id="use19" transform="rotate(10 250 250)" xlink:href="#use18"/>
+  <use id="use20" transform="rotate(10 250 250)" xlink:href="#use19"/>
+  <use id="use21" transform="rotate(10 250 250)" xlink:href="#use20"/>
+  <use id="use22" transform="rotate(10 250 250)" xlink:href="#use21"/>
+  <use id="use23" transform="rotate(10 250 250)" xlink:href="#use22"/>
+  <use id="use24" transform="rotate(10 250 250)" xlink:href="#use23"/>
+  <use id="use25" transform="rotate(10 250 250)" xlink:href="#use24"/>
+  <use id="use26" transform="rotate(20 250 250)" xlink:href="#use25"/>
+  <use id="use27" transform="rotate(10 250 250)" xlink:href="#use26"/>
+  <use id="use28" transform="rotate(10 250 250)" xlink:href="#use27"/>
+  <use id="use29" transform="rotate(10 250 250)" xlink:href="#use28"/>
+  <use id="use30" transform="rotate(10 250 250)" xlink:href="#use29"/>
+  <use id="use31" transform="rotate(10 250 250)" xlink:href="#use30"/>
+  <use id="use32" transform="rotate(10 250 250)" xlink:href="#use31"/>
+  <use transform="rotate(10 250 250)" xlink:href="#use32"/>
+  <use transform="rotate(10 250 250)" xlink:href="#use25"/>
+</svg>

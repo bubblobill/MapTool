@@ -15,27 +15,6 @@
 package net.rptools.maptool.client.ui.zone.renderer;
 
 import com.google.common.eventbus.Subscribe;
-import java.awt.*;
-import java.awt.Rectangle;
-import java.awt.dnd.DropTargetDragEvent;
-import java.awt.dnd.DropTargetDropEvent;
-import java.awt.dnd.DropTargetEvent;
-import java.awt.dnd.DropTargetListener;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseMotionAdapter;
-import java.awt.font.FontRenderContext;
-import java.awt.font.TextLayout;
-import java.awt.geom.*;
-import java.awt.image.BufferedImage;
-import java.text.NumberFormat;
-import java.util.*;
-import java.util.List;
-import java.util.stream.Collectors;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import javax.imageio.ImageIO;
-import javax.swing.*;
 import net.rptools.lib.CodeTimer;
 import net.rptools.lib.MD5Key;
 import net.rptools.maptool.client.*;
@@ -60,12 +39,14 @@ import net.rptools.maptool.client.ui.zone.*;
 import net.rptools.maptool.client.walker.ZoneWalker;
 import net.rptools.maptool.events.MapToolEventBus;
 import net.rptools.maptool.language.I18N;
-import net.rptools.maptool.model.*;
 import net.rptools.maptool.model.Label;
+import net.rptools.maptool.model.*;
 import net.rptools.maptool.model.LookupTable.LookupEntry;
 import net.rptools.maptool.model.Token.TokenShape;
 import net.rptools.maptool.model.Zone.Layer;
-import net.rptools.maptool.model.drawing.*;
+import net.rptools.maptool.model.drawing.DrawableNoise;
+import net.rptools.maptool.model.drawing.DrawableTexturePaint;
+import net.rptools.maptool.model.drawing.DrawnElement;
 import net.rptools.maptool.model.player.Player;
 import net.rptools.maptool.model.zones.*;
 import net.rptools.maptool.util.CollectionUtil;
@@ -75,6 +56,27 @@ import net.rptools.maptool.util.StringUtil;
 import net.rptools.parser.ParserException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import javax.imageio.ImageIO;
+import javax.swing.*;
+import java.awt.*;
+import java.awt.dnd.DropTargetDragEvent;
+import java.awt.dnd.DropTargetDropEvent;
+import java.awt.dnd.DropTargetEvent;
+import java.awt.dnd.DropTargetListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseMotionAdapter;
+import java.awt.font.FontRenderContext;
+import java.awt.font.TextLayout;
+import java.awt.geom.*;
+import java.awt.image.BufferedImage;
+import java.text.NumberFormat;
+import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /** */
 public class ZoneRenderer extends JComponent implements DropTargetListener {
@@ -2411,7 +2413,7 @@ public class ZoneRenderer extends JComponent implements DropTargetListener {
       timer.stop("tokenlist-6");
 
       // Render Halo
-      haloRenderer.renderHalo(tokenG, token, location);
+      haloRenderer.renderHalo(tokenG, location, true);
 
       // Calculate alpha Transparency from token and use opacity for indicating that token is moving
       float opacity = token.getTokenOpacity();
@@ -3563,6 +3565,7 @@ public class ZoneRenderer extends JComponent implements DropTargetListener {
 
     // A change in grid can change the size of templates.
     flushDrawableRenderer();
+    haloRenderer.gridChanged(this);
     repaintDebouncer.dispatch();
   }
 

@@ -20,7 +20,7 @@ import java.awt.geom.Rectangle2D;
 import net.rptools.lib.CodeTimer;
 import net.rptools.maptool.model.Token;
 
-class TokenLocation {
+public class TokenLocation {
 
   private final ZoneRenderer renderer;
   public Area bounds;

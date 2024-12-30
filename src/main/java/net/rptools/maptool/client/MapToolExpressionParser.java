@@ -68,7 +68,7 @@ public class MapToolExpressionParser extends ExpressionParser {
               TokenBarFunction.getInstance(),
               TokenCopyDeleteFunctions.getInstance(),
               TokenGMNameFunction.getInstance(),
-              TokenHaloFunction.getInstance(),
+              HaloFunctions.getInstance(),
               TokenImage.getInstance(),
               TokenInitFunction.getInstance(),
               TokenInitHoldFunction.getInstance(),

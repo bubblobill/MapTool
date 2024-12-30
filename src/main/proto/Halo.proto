@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package maptool;
+
+option java_multiple_files = true;
+option java_package = "net.rptools.maptool.server.proto.halo";
+option java_outer_classname = "HaloDtoProtos";
+
+import "google/protobuf/wrappers.proto";
+import "drawing_dto.proto";
+
+/*
+ * For easier differentiation between protobuf classes and "normal" classes
+ * protobuf classes end with "Dto" or "Msg".
+ */
+
+message HaloDto {
+  int32 type = 1;
+  int32 style = 2;
+  int32 stockImage = 10;
+  bool filled = 6;
+  bool isoFlipped = 11;
+  bool useFacing = 12;
+  double scaleFactor = 3;
+  double rotation = 4;
+  string md5key = 5;
+  repeated int32 colorList = 7;
+  repeated string svgPaths = 8;
+  repeated PathShapeDto pathList = 9;
+}

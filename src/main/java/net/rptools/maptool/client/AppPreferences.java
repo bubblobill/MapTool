@@ -15,8 +15,8 @@
 package net.rptools.maptool.client;
 
 import com.twelvemonkeys.image.ResampleOp;
-import net.rptools.maptool.client.ui.theme.Halos;
-import net.rptools.maptool.client.ui.zone.renderer.Halo;
+import net.rptools.maptool.client.ui.Halos;
+import net.rptools.maptool.model.Halo;
 import net.rptools.maptool.client.walker.WalkerMetric;
 import net.rptools.maptool.language.I18N;
 import net.rptools.maptool.model.GridFactory;

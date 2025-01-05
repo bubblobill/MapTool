@@ -21,7 +21,7 @@ import net.rptools.maptool.client.AppPreferences;
 import net.rptools.maptool.client.swing.ImageBorder;
 import net.rptools.maptool.client.ui.Halos;
 import net.rptools.maptool.util.ImageManager;
-import net.rptools.maptool.util.svg.SVGUtil;
+import net.rptools.maptool.util.svg.SVGDocumentUtils;
 import org.javatuples.Triplet;
 
 import javax.swing.*;
@@ -53,6 +53,7 @@ public class RessourceManager {
             put(Halos.MAGIC_CIRCLE, HALO_DIR + "ringStack.svg");
             put(Halos.RINGSTACK, HALO_DIR + "runeCircle.svg");
             put(Halos.SPIKE, HALO_DIR + "spike.svg");
+            put(Halos.SPIN_TRIANGLE, HALO_DIR + "spinTriangle.svg");
             put(Halos.SPIROGRAPH, HALO_DIR + "spirograph.svg");
             put(Halos.THIS_WAY, HALO_DIR + "thisWay.svg");
             put(Halos.TREFOLIAGE, HALO_DIR + "treFoliage.svg");
@@ -483,27 +484,22 @@ public class RessourceManager {
     public static int bigIconSize = 32;
     private static HashMap<Triplet<String, Integer, Integer>, ImageIcon> iconCache = new HashMap<>();
     private static HashMap<String, BufferedImage> imageCache = new HashMap<>();
-    private static HashMap<String, Object> haloCache = new HashMap<>();
+    private static HashMap<String, SVGDocumentUtils.LoadRecord> haloCache = new HashMap<>();
     private static HashMap<String, javafx.scene.image.Image> fxImageCache = new HashMap<>();
     private static HashMap<String, ImageBorder> borderCache = new HashMap<>();
 public static void clearHaloCache(){
     haloCache.clear();
 }
 public static String getHaloPath(Halos halo){ return halos.get(halo); }
-    public static Object getHalo(Halos halo) {
-        System.out.println(halo);
+    public static SVGDocumentUtils.LoadRecord getHalo(Halos halo) {
         return getFromHashMapsAndCache(
                 halo,
                 haloCache,
                 path -> {
                     try {
-                        return SVGUtil.getSVGString(path);
+                        return SVGDocumentUtils.getSVGLoadRecord(path);
                     } catch (Exception e) {
-                        try {
-                            return ImageUtil.getImage(path);
-                        } catch (Exception ex) {
-                            return ImageManager.BROKEN_IMAGE;
-                        }
+                        return new SVGDocumentUtils.LoadRecord(null, null, ImageManager.BROKEN_IMAGE);
                     }
                 },
                 path -> path,

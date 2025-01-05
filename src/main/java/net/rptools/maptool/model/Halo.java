@@ -2,7 +2,6 @@ package net.rptools.maptool.model;
 
 import net.rptools.lib.MD5Key;
 import net.rptools.maptool.client.AppPreferences;
-import net.rptools.maptool.client.MapToolUtil;
 import net.rptools.maptool.client.ui.Halos;
 import net.rptools.maptool.server.Mapper;
 import net.rptools.maptool.server.proto.halo.HaloDto;
@@ -33,33 +32,31 @@ public class Halo {
             null;
     private List<Path2D> drawingList = new ArrayList<>();
     private List<String> svgPaths = new ArrayList<>();
-    private List<Color> colourList = new ArrayList<Color>(List.of(new Color(AppPreferences.haloColor.get()))){
-        public void clean(){
-            this.removeIf(Objects::isNull);
-            this.trimToSize();
+    private List<String> svgFilters = new ArrayList<>(List.of("glow"));
+    public boolean hasSVGFilter(){
+        if(svgFilters == null){
+            svgFilters = new ArrayList<>();
         }
-        @Override
-        public String toString() {
-            this.clean();
-            if(isEmpty()){
-                return "";
-            }
-            return String.join(
-                    ", ",
-                    this.stream().map(color -> String.format("#%06x", color.getRGB() & 0x00FFFFFF)).toList()
-            );
-        }
+        return !svgFilters.isEmpty();
+    }
+    public void addSVGFilter(String filter){
+        svgFilters.add(filter);
+    }
+    public void removeSVGFilter(String filter){
+        svgFilters.remove(filter);
+    }
+    public void setSvgFilters(List<String> svgFilters) {
+        this.svgFilters = svgFilters;
+    }
 
-        @Override
-        public Color getFirst() {
-            this.clean();
-            if(!isEmpty()) {
-                return super.getFirst();
-            } else {
-                return MapToolUtil.getRandomColor();
-            }
+    public List<String> getSvgFilters() {
+        if(this.svgFilters == null){
+            this.svgFilters = new ArrayList<>();
         }
-    };
+        return svgFilters;
+    }
+
+    private List<Color> colourList = new ArrayList<Color>(List.of(new Color(AppPreferences.haloColor.get())));
 
 
     public Halo() {}
@@ -353,6 +350,7 @@ public class Halo {
         h.setImageId(new MD5Key(haloDto.getMd5Key()));
         h.setColourList(haloDto.getColorListList().stream().map(Color::new).collect(Collectors.toList()));
         h.svgPaths = haloDto.getSvgPathsList();
+        h.setSvgFilters(haloDto.getSvgFiltersList());
         h.setDrawingList(haloDto.getPathListList().stream()
                 .map(Mapper::map).collect(Collectors.toList()));
         return h;
@@ -377,6 +375,9 @@ public class Halo {
         }
         if(!getSvgPaths().isEmpty()) {
             dto.addAllSvgPaths(getSvgPaths());
+        }
+        if(hasSVGFilter()) {
+            dto.addAllSvgFilters(getSvgFilters());
         }
         if(!getDrawingList().isEmpty()) {
             dto.addAllPathList(getDrawingList().stream().map(Mapper::map).collect(Collectors.toList()));

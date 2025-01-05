@@ -7,6 +7,7 @@ option java_package = "net.rptools.maptool.server.proto";
 option java_outer_classname = "DataTranferObjectProtos";
 
 import "drawing_dto.proto";
+import "Halo.proto";
 import "google/protobuf/wrappers.proto";
 /*
  * For easier differentiation between protobuf classes and "normal" classes
@@ -366,6 +367,7 @@ message TokenDto {
   string notes_type = 68;
   string gm_notes_type = 69;
   StatSheetPropertiesDto stat_sheet_properties = 70;
+  HaloDto halo = 73;
 }
 
 message PathDto {
@@ -632,6 +634,7 @@ enum TokenUpdateDto {
     setX = 27;
     setY = 28;
     setXY = 29;
+    setHalo =58;
     setHaloColor = 30;
     setLabel = 31;
     setName = 32;
@@ -685,6 +688,7 @@ message TokenPropertyValueDto {
     GridDto grid = 10;
     TokenFootPrintDto token_foot_print = 11;
     string topology_type = 12;
+    HaloDto halo = 13;
   }
 }
 

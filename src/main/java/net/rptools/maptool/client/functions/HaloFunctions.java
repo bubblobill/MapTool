@@ -26,7 +26,7 @@ import net.rptools.maptool.model.Halo;
 import net.rptools.maptool.model.Token;
 import net.rptools.maptool.util.FunctionUtil;
 import net.rptools.maptool.util.StringUtil;
-import net.rptools.maptool.util.svg.SVGModificationFactory;
+import net.rptools.maptool.util.svg.SVGDocumentModifier;
 import net.rptools.parser.Parser;
 import net.rptools.parser.ParserException;
 import net.rptools.parser.VariableResolver;
@@ -235,7 +235,7 @@ public class HaloFunctions extends AbstractFunction {
             case "halo.getImages" ->
                     values = Arrays.stream(Halos.values()).toList().stream().map(Enum::toString).toList();
             case "halo.getSVGFilters" ->
-                    values = SVGModificationFactory.getAvailableFilters();
+                    values = SVGDocumentModifier.getAvailableFilters();
         }
         if ("json".equals(delimiter)) {
             final JsonArray jArr = new JsonArray();
@@ -286,7 +286,7 @@ public class HaloFunctions extends AbstractFunction {
                         case "drawing", "path" -> halo.setDrawing(jObj.get(s).getAsString().toUpperCase());
                         case "filled", "fill" -> halo.setFilled(jObj.get(s).getAsBoolean());
                         case "isoflip", "flipiso" -> halo.setIsoFlipped(jObj.get(s).getAsBoolean());
-                        case "facing", "usefacing" -> halo.setIsoFlipped(jObj.get(s).getAsBoolean());
+                        case "facing", "usefacing" -> halo.setUseFacing(jObj.get(s).getAsBoolean());
                         case "image", "imageid", "assetid" ->
                                 halo.setImageId(FunctionUtil.getAssetKeyFromString(jObj.get(s).getAsString()));
                         case "opacity" -> halo.setOpacity(jObj.get(s).getAsFloat());
@@ -306,6 +306,7 @@ public class HaloFunctions extends AbstractFunction {
                                 throw new ParserException(I18N.getText("macro.function.parse.enum.illegalArgumentType", functionName, jObj.get(s).getAsString(), Arrays.toString(Halo.Style.values())));
                             }
                         }
+                        case "svgfilter" -> halo.setSvgFilters(Arrays.stream(jObj.get(s).getAsString().split("[,|\\s]")).toList());
                         case "type" -> {
                             try {
                                 halo.setType(Halo.Type.get(jObj.get(s).getAsString().toUpperCase()));
@@ -347,6 +348,7 @@ public class HaloFunctions extends AbstractFunction {
     }
 
     private Object getHaloProps(VariableResolver resolver, String functionName, List<Object> parameters) throws ParserException {
+        /* args - delim, tokenId, mapName */
         FunctionUtil.checkNumberParam(functionName, parameters, 0, 3);
         String delimiter = !parameters.isEmpty() ? parameters.getFirst().toString() : ";";
         Token token = FunctionUtil.getTokenFromParam(resolver, functionName, parameters, 1, 2);
@@ -361,35 +363,40 @@ public class HaloFunctions extends AbstractFunction {
         double opacity = halo.getOpacity();
         double rotation = halo.getRotation();
         double scale = halo.getScaleFactor();
-
         String style = String.valueOf(halo.getStyle());
-        String drawing = Arrays.toString(halo.getSvgPaths().toArray());
-
+        String svgfilters = (String) FunctionUtil.delimitedResult(delimiter,halo.getSvgFilters());
+        String drawing = (String) FunctionUtil.delimitedResult(delimiter,halo.getSvgPaths());
+        String colours = (String) FunctionUtil.delimitedResult(delimiter,
+                halo.getColourList().stream().map(color -> String.format("#%06x", color.getRGB() & 0x00FFFFFF))
+                        .toList());
         if ("json".equals(delimiter)) {
-            JsonObject jArr = new JsonObject();
-            jArr.addProperty("type", type);
-            jArr.addProperty("style", style);
-            jArr.addProperty("filled", filled);
-            jArr.addProperty("opacity", opacity);
-            jArr.addProperty("rotation", rotation);
-            jArr.addProperty("scale", scale);
-            jArr.addProperty("colours", Arrays.toString(halo.getColourList().toArray()));
+            JsonObject jObj = new JsonObject();
+            jObj.addProperty("type", type);
+            jObj.addProperty("style", style);
+            jObj.addProperty("filled", filled);
+            jObj.addProperty("opacity", opacity);
+            jObj.addProperty("rotation", rotation);
+            jObj.addProperty("scale", scale);
+            jObj.addProperty("colours", colours);
             if (halo.hasImageId()) {
-                jArr.addProperty("image", imageId);
+                jObj.addProperty("image", imageId);
             }
             if (halo.hasStockImage()) {
-                jArr.addProperty("stockImage", stockImage);
+                jObj.addProperty("stockImage", stockImage);
             }
             if (halo.hasSVGPath()) {
-                jArr.addProperty("svg", drawing);
+                jObj.addProperty("svg", drawing);
             }
-            return jArr;
+            if (halo.hasSVGFilter()) {
+                jObj.addProperty("svgFilters", svgfilters);
+            }
+            return jObj;
         } else {
             StringBuilder sb = new StringBuilder();
             sb.append("type=").append(type).append(delimiter);
             sb.append("filled=").append(filled).append(delimiter);
             sb.append("opacity=").append(opacity).append(delimiter);
-            sb.append("colours=").append(halo.getColourList()).append(delimiter);
+            sb.append("colours=").append(colours).append(delimiter);
             sb.append("style=").append(style).append(delimiter);
             sb.append("rotation=").append(rotation).append(delimiter);
             sb.append("scale=").append(scale).append(delimiter);
@@ -401,6 +408,9 @@ public class HaloFunctions extends AbstractFunction {
             }
             if (halo.hasSVGPath()) {
                 sb.append("svg=").append(drawing).append(delimiter);
+            }
+            if (halo.hasSVGFilter()) {
+                sb.append("svgFilters=").append(svgfilters);
             }
             return sb.toString();
         }

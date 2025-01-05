@@ -26,5 +26,6 @@ message HaloDto {
   string md5key = 5;
   repeated int32 colorList = 7;
   repeated string svgPaths = 8;
+  repeated string svgFilters = 13;
   repeated PathShapeDto pathList = 9;
 }

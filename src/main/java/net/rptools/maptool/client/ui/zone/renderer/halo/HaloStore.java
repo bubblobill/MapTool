@@ -1,11 +1,15 @@
-package net.rptools.maptool.client.ui.zone.renderer;
+package net.rptools.maptool.client.ui.zone.renderer.halo;
 
 import net.rptools.lib.CodeTimer;
 import net.rptools.maptool.client.AppPreferences;
 import net.rptools.maptool.client.ui.theme.RessourceManager;
+import net.rptools.maptool.client.ui.zone.renderer.TokenLocation;
 import net.rptools.maptool.model.*;
 import net.rptools.maptool.util.GraphicsUtil;
 import net.rptools.maptool.util.ImageManager;
+import net.rptools.maptool.util.svg.SVGDocumentUtils;
+import net.rptools.maptool.util.svg.SVGUtil;
+import org.apache.batik.anim.dom.SVGOMDocument;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -13,6 +17,7 @@ import java.awt.*;
 import java.awt.geom.*;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 public class HaloStore {
     private static final Logger log = LogManager.getLogger(HaloStore.class);
@@ -112,12 +117,21 @@ public class HaloStore {
                 transformIso = true;
             }
             case STOCK_IMAGE -> {
-                haloObject = RessourceManager.getHalo(halo.getStockImageOrDefault());
-
+                SVGDocumentUtils.LoadRecord loadRecord = RessourceManager.getHalo(halo.getStockImageOrDefault());
+                if(loadRecord.image() == null && loadRecord.batikSVG() != null){
+                    haloObject = Objects.requireNonNull( loadRecord.batikSVG());
+                    if(!halo.getSvgFilters().isEmpty()){
+                        haloObject = SVGUtil.addFilters(haloObject, halo.getSvgFilters());
+                    }
+                    haloObject = SVGUtil.colourSubstitute((SVGOMDocument) haloObject, halo.getColourList());
+                } else {
+                    haloObject = loadRecord.image();
+                }
             }
             case IMAGE -> haloObject = ImageManager.getImage(halo.getImageId());
             default -> log.info("Unhandled HaloType in createHalo: " + halo.getType());
         }
+
         if (isIso && transformIso) {
             haloObject = AffineTransform.getRotateInstance(Math.TAU / 8).createTransformedShape((Shape) haloObject);
             haloObject = AffineTransform.getScaleInstance(1, 0.5).createTransformedShape((Shape) haloObject);
